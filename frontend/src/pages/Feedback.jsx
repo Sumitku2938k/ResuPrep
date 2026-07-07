@@ -48,8 +48,8 @@ export default function Feedback() {
           <div className="glass-card p-6 !hover:transform-none lg:sticky lg:top-24 lg:self-start">
             <h3 className="font-heading font-bold text-slate-200 mb-5">Submit Feedback</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <input placeholder="Your Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="glow-input text-sm" />
-              <input placeholder="Your Role (optional)" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className="glow-input text-sm" />
+              <input placeholder="Your Name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="glow-input text-sm p-2" />
+              <input placeholder="Your Role (optional)" value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} className="glow-input text-sm p-2" />
 
               <div>
                 <p className="text-sm text-slate-400 mb-2">Rating</p>
@@ -68,13 +68,13 @@ export default function Feedback() {
                 </div>
               </div>
 
-              <select value={form.feature} onChange={e => setForm({ ...form, feature: e.target.value })} className="glow-input text-sm">
+              <select value={form.feature} onChange={e => setForm({ ...form, feature: e.target.value })} className="glow-input text-sm p-2">
                 {features.map(f => (
                   <option key={f} value={f}>{f.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')}</option>
                 ))}
               </select>
 
-              <textarea rows={4} placeholder="Your feedback message..." value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} className="glow-input text-sm resize-none" />
+              <textarea rows={4} placeholder="Your feedback message..." value={form.message} onChange={e => setForm({ ...form, message: e.target.value })} className="glow-input text-sm p-2 resize-none" />
 
               <button type="submit" className="w-full btn-primary">Submit Feedback</button>
             </form>

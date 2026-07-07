@@ -80,12 +80,12 @@ export default function CoverLetter() {
         <div className="grid lg:grid-cols-2 gap-8">
           {/* Form */}
           <div className="glass-card p-6 !hover:transform-none space-y-4">
-            <input placeholder="Your Full Name" value={form.name} onChange={e => handleChange('name', e.target.value)} className="glow-input text-sm" />
-            <input placeholder="Job Title" value={form.jobTitle} onChange={e => handleChange('jobTitle', e.target.value)} className="glow-input text-sm" />
-            <input placeholder="Company Name" value={form.company} onChange={e => handleChange('company', e.target.value)} className="glow-input text-sm" />
-            <input placeholder="Hiring Manager Name" value={form.hiringManager} onChange={e => handleChange('hiringManager', e.target.value)} className="glow-input text-sm" />
-            <input placeholder="Key Skills (comma separated)" value={form.keySkills} onChange={e => handleChange('keySkills', e.target.value)} className="glow-input text-sm" />
-            <textarea placeholder="Notable Achievement" rows={2} value={form.achievement} onChange={e => handleChange('achievement', e.target.value)} className="glow-input text-sm resize-none" />
+            <input placeholder="Your Full Name" value={form.name} onChange={e => handleChange('name', e.target.value)} className="glow-input text-sm p-2" />
+            <input placeholder="Job Title" value={form.jobTitle} onChange={e => handleChange('jobTitle', e.target.value)} className="glow-input text-sm p-2" />
+            <input placeholder="Company Name" value={form.company} onChange={e => handleChange('company', e.target.value)} className="glow-input text-sm p-2" />
+            <input placeholder="Hiring Manager Name" value={form.hiringManager} onChange={e => handleChange('hiringManager', e.target.value)} className="glow-input text-sm p-2" />
+            <input placeholder="Key Skills (comma separated)" value={form.keySkills} onChange={e => handleChange('keySkills', e.target.value)} className="glow-input text-sm p-2" />
+            <textarea placeholder="Notable Achievement" rows={2} value={form.achievement} onChange={e => handleChange('achievement', e.target.value)} className="glow-input text-sm p-2 resize-none" />
 
             <div>
               <p className="text-sm text-slate-400 mb-2">Tone:</p>

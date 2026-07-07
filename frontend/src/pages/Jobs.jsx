@@ -45,17 +45,17 @@ export default function Jobs() {
           <div className="lg:sticky lg:top-24 lg:self-start">
             <form onSubmit={handleSubmit} className="glass-card p-6 space-y-4 !hover:transform-none">
               <h3 className="font-heading font-bold text-slate-200">Your Profile</h3>
-              <input type="text" placeholder="Full Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="glow-input text-sm" />
-              <input type="text" placeholder="Skills (comma separated)" value={form.skills} onChange={e => setForm({...form, skills: e.target.value})} className="glow-input text-sm" />
-              <select value={form.experience} onChange={e => setForm({...form, experience: e.target.value})} className="glow-input text-sm">
+              <input type="text" placeholder="Full Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="glow-input text-sm p-2" />
+              <input type="text" placeholder="Skills (comma separated)" value={form.skills} onChange={e => setForm({...form, skills: e.target.value})} className="glow-input text-sm p-2" />
+              <select value={form.experience} onChange={e => setForm({...form, experience: e.target.value})} className="glow-input text-sm p-2">
                 <option value="">Experience Level</option>
                 <option value="entry">Entry Level (0-2 years)</option>
                 <option value="mid">Mid Level (3-5 years)</option>
                 <option value="senior">Senior Level (5+ years)</option>
                 <option value="lead">Lead/Principal (8+ years)</option>
               </select>
-              <input type="text" placeholder="Education" value={form.education} onChange={e => setForm({...form, education: e.target.value})} className="glow-input text-sm" />
-              <input type="text" placeholder="Preferred Role" value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="glow-input text-sm" />
+              <input type="text" placeholder="Education" value={form.education} onChange={e => setForm({...form, education: e.target.value})} className="glow-input text-sm p-2" />
+              <input type="text" placeholder="Preferred Role" value={form.role} onChange={e => setForm({...form, role: e.target.value})} className="glow-input text-sm p-2" />
               <button type="submit" disabled={loading} className="w-full btn-primary flex items-center justify-center gap-2">
                 {loading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : '🔍'} Find Matching Jobs
               </button>

@@ -187,7 +187,7 @@ export default function Analyzer() {
                   onChange={(e) => setResumeText(e.target.value)}
                   placeholder="Paste your resume text here..."
                   rows={5}
-                  className="glow-input resize-none text-sm"
+                  className="glow-input resize-none text-sm p-2"
                 />
               </div>
 
@@ -206,7 +206,7 @@ export default function Analyzer() {
                 onChange={(e) => setJobDescription(e.target.value)}
                 placeholder="Paste the target job description here..."
                 rows={8}
-                className="glow-input resize-none text-sm"
+                className="glow-input resize-none text-sm p-2"
               />
               <button onClick={() => { setJobDescription(sampleJD); toast.success('Sample JD loaded'); }} className="mt-3 text-xs text-primary-400 hover:text-primary-300 transition-colors">
                 ⚡ Load Sample JD

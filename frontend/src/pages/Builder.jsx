@@ -106,19 +106,19 @@ export default function Builder() {
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-3">
-                <input placeholder="Full Name" value={p.fullName} onChange={e => updatePersonal('fullName', e.target.value)} className="glow-input text-sm" />
-                <input placeholder="Email" value={p.email} onChange={e => updatePersonal('email', e.target.value)} className="glow-input text-sm" />
-                <input placeholder="Phone" value={p.phone} onChange={e => updatePersonal('phone', e.target.value)} className="glow-input text-sm" />
-                <input placeholder="Location" value={p.location} onChange={e => updatePersonal('location', e.target.value)} className="glow-input text-sm" />
-                <input placeholder="LinkedIn URL" value={p.linkedin} onChange={e => updatePersonal('linkedin', e.target.value)} className="glow-input text-sm" />
-                <input placeholder="Website" value={p.website} onChange={e => updatePersonal('website', e.target.value)} className="glow-input text-sm" />
+                <input placeholder="Full Name" value={p.fullName} onChange={e => updatePersonal('fullName', e.target.value)} className="glow-input text-sm p-2" />
+                <input placeholder="Email" value={p.email} onChange={e => updatePersonal('email', e.target.value)} className="glow-input text-sm p-2" />
+                <input placeholder="Phone" value={p.phone} onChange={e => updatePersonal('phone', e.target.value)} className="glow-input text-sm p-2" />
+                <input placeholder="Location" value={p.location} onChange={e => updatePersonal('location', e.target.value)} className="glow-input text-sm p-2" />
+                <input placeholder="LinkedIn URL" value={p.linkedin} onChange={e => updatePersonal('linkedin', e.target.value)} className="glow-input text-sm p-2" />
+                <input placeholder="Website" value={p.website} onChange={e => updatePersonal('website', e.target.value)} className="glow-input text-sm p-2" />
               </div>
             </div>
 
             {/* Summary */}
             <div className="glass-card p-5 !hover:transform-none">
               <h3 className="font-heading font-bold text-slate-200 mb-4">📝 Summary</h3>
-              <textarea rows={3} placeholder="Professional summary..." value={resume.summary} onChange={e => setResume(prev => ({ ...prev, summary: e.target.value }))} className="glow-input text-sm resize-none" />
+              <textarea rows={3} placeholder="Professional summary..." value={resume.summary} onChange={e => setResume(prev => ({ ...prev, summary: e.target.value }))} className="glow-input text-sm p-2 resize-none" />
             </div>
 
             {/* Education */}
@@ -129,12 +129,12 @@ export default function Builder() {
               </div>
               {resume.education.map((edu, i) => (
                 <div key={i} className="space-y-2 mb-4 pb-4 border-b border-white/5 last:border-0 last:mb-0 last:pb-0">
-                  <div className="flex justify-between"><input placeholder="Institution" value={edu.institution} onChange={e => updateArray('education', i, 'institution', e.target.value)} className="glow-input text-sm flex-1" />{i > 0 && <button onClick={() => removeItem('education', i)} className="ml-2 text-red-400 hover:text-red-300"><HiTrash /></button>}</div>
+                  <div className="flex justify-between"><input placeholder="Institution" value={edu.institution} onChange={e => updateArray('education', i, 'institution', e.target.value)} className="glow-input text-sm p-2 flex-1" />{i > 0 && <button onClick={() => removeItem('education', i)} className="ml-2 text-red-400 hover:text-red-300"><HiTrash /></button>}</div>
                   <div className="grid grid-cols-2 gap-2">
-                    <input placeholder="Degree" value={edu.degree} onChange={e => updateArray('education', i, 'degree', e.target.value)} className="glow-input text-sm" />
-                    <input placeholder="Field" value={edu.field} onChange={e => updateArray('education', i, 'field', e.target.value)} className="glow-input text-sm" />
-                    <input placeholder="Start Year" value={edu.startDate} onChange={e => updateArray('education', i, 'startDate', e.target.value)} className="glow-input text-sm" />
-                    <input placeholder="End Year" value={edu.endDate} onChange={e => updateArray('education', i, 'endDate', e.target.value)} className="glow-input text-sm" />
+                    <input placeholder="Degree" value={edu.degree} onChange={e => updateArray('education', i, 'degree', e.target.value)} className="glow-input text-sm p-2" />
+                    <input placeholder="Field" value={edu.field} onChange={e => updateArray('education', i, 'field', e.target.value)} className="glow-input text-sm p-2" />
+                    <input placeholder="Start Year" value={edu.startDate} onChange={e => updateArray('education', i, 'startDate', e.target.value)} className="glow-input text-sm p-2" />
+                    <input placeholder="End Year" value={edu.endDate} onChange={e => updateArray('education', i, 'endDate', e.target.value)} className="glow-input text-sm p-2" />
                   </div>
                 </div>
               ))}
@@ -148,14 +148,14 @@ export default function Builder() {
               </div>
               {resume.experience.map((exp, i) => (
                 <div key={i} className="space-y-2 mb-4 pb-4 border-b border-white/5 last:border-0 last:mb-0 last:pb-0">
-                  <div className="flex justify-between"><input placeholder="Position" value={exp.position} onChange={e => updateArray('experience', i, 'position', e.target.value)} className="glow-input text-sm flex-1" />{i > 0 && <button onClick={() => removeItem('experience', i)} className="ml-2 text-red-400 hover:text-red-300"><HiTrash /></button>}</div>
+                  <div className="flex justify-between"><input placeholder="Position" value={exp.position} onChange={e => updateArray('experience', i, 'position', e.target.value)} className="glow-input text-sm p-2 flex-1" />{i > 0 && <button onClick={() => removeItem('experience', i)} className="ml-2 text-red-400 hover:text-red-300"><HiTrash /></button>}</div>
                   <div className="grid grid-cols-2 gap-2">
-                    <input placeholder="Company" value={exp.company} onChange={e => updateArray('experience', i, 'company', e.target.value)} className="glow-input text-sm" />
-                    <input placeholder="Location" value={exp.location} onChange={e => updateArray('experience', i, 'location', e.target.value)} className="glow-input text-sm" />
-                    <input placeholder="Start Date" value={exp.startDate} onChange={e => updateArray('experience', i, 'startDate', e.target.value)} className="glow-input text-sm" />
-                    <input placeholder="End Date" value={exp.endDate} onChange={e => updateArray('experience', i, 'endDate', e.target.value)} className="glow-input text-sm" />
+                    <input placeholder="Company" value={exp.company} onChange={e => updateArray('experience', i, 'company', e.target.value)} className="glow-input text-sm p-2" />
+                    <input placeholder="Location" value={exp.location} onChange={e => updateArray('experience', i, 'location', e.target.value)} className="glow-input text-sm p-2" />
+                    <input placeholder="Start Date" value={exp.startDate} onChange={e => updateArray('experience', i, 'startDate', e.target.value)} className="glow-input text-sm p-2" />
+                    <input placeholder="End Date" value={exp.endDate} onChange={e => updateArray('experience', i, 'endDate', e.target.value)} className="glow-input text-sm p-2" />
                   </div>
-                  <textarea rows={3} placeholder="Description (bullet points)" value={exp.description} onChange={e => updateArray('experience', i, 'description', e.target.value)} className="glow-input text-sm resize-none" />
+                  <textarea rows={3} placeholder="Description (bullet points)" value={exp.description} onChange={e => updateArray('experience', i, 'description', e.target.value)} className="glow-input text-sm p-2 resize-none" />
                 </div>
               ))}
             </div>
@@ -169,7 +169,7 @@ export default function Builder() {
               <div className="flex flex-wrap gap-2">
                 {resume.skills.map((skill, i) => (
                   <div key={i} className="flex items-center gap-1">
-                    <input placeholder="Skill" value={skill} onChange={e => { const arr = [...resume.skills]; arr[i] = e.target.value; setResume(prev => ({ ...prev, skills: arr })); }} className="glow-input text-sm !w-32 !py-1.5 !px-2" />
+                    <input placeholder="Skill" value={skill} onChange={e => { const arr = [...resume.skills]; arr[i] = e.target.value; setResume(prev => ({ ...prev, skills: arr })); }} className="glow-input text-sm p-2 !w-32 !py-1.5 !px-2" />
                     {i > 0 && <button onClick={() => setResume(prev => ({ ...prev, skills: prev.skills.filter((_, j) => j !== i) }))} className="text-red-400 text-xs"><HiTrash /></button>}
                   </div>
                 ))}
@@ -184,9 +184,9 @@ export default function Builder() {
               </div>
               {resume.projects.map((proj, i) => (
                 <div key={i} className="space-y-2 mb-4 pb-4 border-b border-white/5 last:border-0 last:mb-0 last:pb-0">
-                  <div className="flex justify-between"><input placeholder="Project Name" value={proj.name} onChange={e => updateArray('projects', i, 'name', e.target.value)} className="glow-input text-sm flex-1" />{i > 0 && <button onClick={() => removeItem('projects', i)} className="ml-2 text-red-400 hover:text-red-300"><HiTrash /></button>}</div>
-                  <textarea rows={2} placeholder="Description" value={proj.description} onChange={e => updateArray('projects', i, 'description', e.target.value)} className="glow-input text-sm resize-none" />
-                  <input placeholder="Technologies" value={proj.technologies} onChange={e => updateArray('projects', i, 'technologies', e.target.value)} className="glow-input text-sm" />
+                  <div className="flex justify-between"><input placeholder="Project Name" value={proj.name} onChange={e => updateArray('projects', i, 'name', e.target.value)} className="glow-input text-sm p-2 flex-1" />{i > 0 && <button onClick={() => removeItem('projects', i)} className="ml-2 text-red-400 hover:text-red-300"><HiTrash /></button>}</div>
+                  <textarea rows={2} placeholder="Description" value={proj.description} onChange={e => updateArray('projects', i, 'description', e.target.value)} className="glow-input text-sm p-2 resize-none" />
+                  <input placeholder="Technologies" value={proj.technologies} onChange={e => updateArray('projects', i, 'technologies', e.target.value)} className="glow-input text-sm p-2" />
                 </div>
               ))}
             </div>
