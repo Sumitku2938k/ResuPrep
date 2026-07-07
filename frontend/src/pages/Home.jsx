@@ -32,7 +32,7 @@ const steps = [
 ];
 
 const testimonials = [
-  { name: 'Sarah Chen', role: 'Software Engineer', text: 'CVIsionary helped me optimize my resume and land 3 interviews in one week. The keyword matching is incredibly accurate!', rating: 5 },
+  { name: 'Sarah Chen', role: 'Software Engineer', text: 'Resuprep helped me optimize my resume and land 3 interviews in one week. The keyword matching is incredibly accurate!', rating: 5 },
   { name: 'Marcus Johnson', role: 'Product Manager', text: 'The skill gap analysis showed me exactly what to learn. I got certified in the recommended areas and got promoted within 6 months.', rating: 5 },
   { name: 'Priya Sharma', role: 'Data Scientist', text: 'The AI cover letter generator saved me hours. Each letter was tailored perfectly, and I loved the different tone options.', rating: 4 },
   { name: 'Alex Rodriguez', role: 'UX Designer', text: 'Beautiful templates and the resume builder preview is so smooth. Exported a PDF that got me compliments in interviews!', rating: 5 },
@@ -65,7 +65,7 @@ export default function Home() {
           </motion.h1>
 
           <motion.p {...fadeUp} transition={{ delay: 0.2 }} className="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-            CVIsionary uses AI & NLP to analyze, match, and guide your career. Get instant scoring, skill gap insights, and professional tools — all in one platform.
+            Resuprep uses AI & NLP to analyze, match, and guide your career. Get instant scoring, skill gap insights, and professional tools — all in one platform.
           </motion.p>
 
           <motion.div {...fadeUp} transition={{ delay: 0.3 }} className="flex flex-col sm:flex-row items-center justify-center gap-4">

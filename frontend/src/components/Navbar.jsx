@@ -72,8 +72,8 @@ export default function Navbar() {
               <path d="M18 14L22 16.5V21.5L18 24L14 21.5V16.5L18 14Z" fill="url(#logoGrad)"/>
             </svg>
             <span className="text-xl font-heading font-black tracking-tight">
-              <span className="gradient-text">CV</span>
-              <span className="text-slate-900 dark:text-slate-200">Isionary</span>
+              <span className="gradient-text">ResuPrep</span>
+              {/* <span className="text-slate-900 dark:text-slate-200">Isionary</span> */}
             </span>
           </Link>
 
