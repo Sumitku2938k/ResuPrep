@@ -520,7 +520,7 @@ Current Phase:
 Phase 1 — Foundation (API Client + Real Authentication)
 
 Current Checkpoint:
-Checkpoint 2 — Frontend API Client Setup (Completed ✅)
+Checkpoint 3 — AuthContext Integration (Completed ✅)
 
 Completed:
 - Repository Audit ✅
@@ -528,12 +528,13 @@ Completed:
 - Implementation Roadmap ✅
 - Checkpoint 1: Backend Authentication Verification ✅
 - Checkpoint 2: Frontend API Client Setup (src/api/client.js & src/api/auth.js) ✅
+- Checkpoint 3: AuthContext Integration (frontend/src/context/AuthContext.jsx) ✅
 
 Next Task:
-Checkpoint 3: Wire Frontend AuthContext & Login UI to Real API
+Checkpoint 4: Wire Login & Signup UI Pages to AuthContext / Real API
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "feat(api): create frontend HTTP client and auth API module")
+Pending user commit approval (Suggested: "feat(auth): refactor AuthContext to use real backend API and handle session bootstrap")
 
 Current Branch:
 main
