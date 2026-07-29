@@ -520,19 +520,20 @@ Current Phase:
 Phase 1 — Foundation (API Client + Real Authentication)
 
 Current Checkpoint:
-Checkpoint 1 — Backend Authentication Verification (Completed ✅)
+Checkpoint 2 — Frontend API Client Setup (Completed ✅)
 
 Completed:
 - Repository Audit ✅
 - Architecture Review ✅
 - Implementation Roadmap ✅
 - Checkpoint 1: Backend Authentication Verification ✅
+- Checkpoint 2: Frontend API Client Setup (src/api/client.js & src/api/auth.js) ✅
 
 Next Task:
-Checkpoint 2: Frontend API Client Setup (src/api/client.js & src/api/auth.js)
+Checkpoint 3: Wire Frontend AuthContext & Login UI to Real API
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "test(auth): verify backend authentication endpoints and JWT functionality")
+Pending user commit approval (Suggested: "feat(api): create frontend HTTP client and auth API module")
 
 Current Branch:
 main
