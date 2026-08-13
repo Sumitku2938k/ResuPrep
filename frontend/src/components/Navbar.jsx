@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { HiMenu, HiX, HiSun, HiMoon } from 'react-icons/hi';
-import { getUser, logoutUser } from '../services/storage';
+import toast from 'react-hot-toast';
+import { useAuth } from '../hooks/useAuth';
 
 const navLinks = [
   { name: 'Analyzer', path: '/analyzer' },
@@ -21,12 +22,11 @@ export default function Navbar() {
     return saved ? saved === 'dark' : true;
   });
   const [scrolled, setScrolled] = useState(false);
-  const location = useLocation();
-  const [user, setUser] = useState(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
-  useEffect(() => {
-    setUser(getUser());
-  }, [location]);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
 
   useEffect(() => {
     const root = document.documentElement;
@@ -49,6 +49,20 @@ export default function Navbar() {
   useEffect(() => {
     setIsOpen(false);
   }, [location]);
+
+  const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+      toast.success('Logged out successfully');
+      navigate('/login');
+    } catch (err) {
+      toast.error('Logout failed');
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -107,7 +121,13 @@ export default function Navbar() {
             {user ? (
               <div className="hidden sm:flex items-center gap-3">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Hi, {user.name}</span>
-                <button onClick={() => { logoutUser(); setUser(null); window.location.href = '/login'; }} className="text-sm text-red-400 hover:text-red-300 font-medium">Logout</button>
+                <button 
+                  onClick={handleLogout} 
+                  disabled={loggingOut}
+                  className="text-sm text-red-400 hover:text-red-300 font-medium disabled:opacity-50"
+                >
+                  {loggingOut ? 'Logging out...' : 'Logout'}
+                </button>
               </div>
             ) : (
               <Link to="/login" className="hidden sm:inline-flex px-4 py-2 rounded-lg text-sm font-medium text-primary-400 border border-primary-500/30 hover:bg-primary-500/10 transition-all">
@@ -153,6 +173,27 @@ export default function Navbar() {
                   {link.name}
                 </Link>
               ))}
+
+              {user ? (
+                <div className="pt-2 border-t border-slate-200 dark:border-white/5 flex items-center justify-between px-4 py-2">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Hi, {user.name}</span>
+                  <button
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="text-sm text-red-400 hover:text-red-300 font-medium disabled:opacity-50"
+                  >
+                    {loggingOut ? 'Logging out...' : 'Logout'}
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  className="block px-4 py-3 rounded-lg text-sm font-medium text-primary-400 hover:bg-primary-500/10"
+                >
+                  Login
+                </Link>
+              )}
+
               <Link to="/analyzer" className="block text-center btn-primary text-sm mt-4">
                 Analyze Resume
               </Link>
