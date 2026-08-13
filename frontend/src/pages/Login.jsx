@@ -15,18 +15,8 @@ export default function Login() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // If the navbar logged out the user (removed ResuPrep_user from localStorage),
-    // we should make sure the backend JWT session/token is cleared as well.
-    if (typeof localStorage !== 'undefined' && !localStorage.getItem('ResuPrep_user')) {
-      if (user || localStorage.getItem('token')) {
-        logout();
-      }
-    }
-  }, [user, logout]);
-
-  useEffect(() => {
-    // If user is already logged in and the localStorage user is present, redirect to home page.
-    if (user && typeof localStorage !== 'undefined' && localStorage.getItem('ResuPrep_user')) {
+    // If user is already logged in via AuthContext, redirect to home page
+    if (user) {
       navigate('/');
     }
   }, [user, navigate]);
@@ -51,9 +41,6 @@ export default function Login() {
 
       if (result.success) {
         toast.success(isLogin ? 'Logged in successfully!' : 'Account created successfully!');
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem('ResuPrep_user', JSON.stringify(result.user));
-        }
         navigate('/');
       } else {
         toast.error(result.message || 'Authentication failed');
