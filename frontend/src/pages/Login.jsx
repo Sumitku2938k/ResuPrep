@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { loginUser, signupUser } from '../services/storage';
+import { useAuth } from '../hooks/useAuth';
 import { HiMail, HiLockClosed, HiUser } from 'react-icons/hi';
 
 export default function Login() {
@@ -10,27 +10,58 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const { user, login, signup, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    // If the navbar logged out the user (removed ResuPrep_user from localStorage),
+    // we should make sure the backend JWT session/token is cleared as well.
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem('ResuPrep_user')) {
+      if (user || localStorage.getItem('token')) {
+        logout();
+      }
+    }
+  }, [user, logout]);
+
+  useEffect(() => {
+    // If user is already logged in and the localStorage user is present, redirect to home page.
+    if (user && typeof localStorage !== 'undefined' && localStorage.getItem('ResuPrep_user')) {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+
     if (!email || !password || (!isLogin && !name)) {
       toast.error('Please fill in all fields');
       return;
     }
 
+    setSubmitting(true);
     try {
+      let result;
       if (isLogin) {
-        loginUser(email, password);
-        toast.success('Logged in successfully!');
+        result = await login(email, password);
       } else {
-        signupUser(name, email, password);
-        toast.success('Account created successfully!');
+        result = await signup(name, email, password);
       }
-      // Force a reload or navigate to trigger Navbar re-render
-      window.location.href = '/'; 
+
+      if (result.success) {
+        toast.success(isLogin ? 'Logged in successfully!' : 'Account created successfully!');
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('ResuPrep_user', JSON.stringify(result.user));
+        }
+        navigate('/');
+      } else {
+        toast.error(result.message || 'Authentication failed');
+      }
     } catch (err) {
-      toast.error('Authentication failed');
+      toast.error('An unexpected error occurred during authentication');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -59,7 +90,8 @@ export default function Login() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="glow-input w-full pl-10"
+                  disabled={submitting}
+                  className="glow-input w-full pl-10 disabled:opacity-50"
                   placeholder="John Doe"
                 />
               </div>
@@ -76,7 +108,8 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="glow-input w-full pl-10"
+                disabled={submitting}
+                className="glow-input w-full pl-10 disabled:opacity-50"
                 placeholder="you@example.com"
               />
             </div>
@@ -92,14 +125,15 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="glow-input w-full pl-10"
+                disabled={submitting}
+                className="glow-input w-full pl-10 disabled:opacity-50"
                 placeholder="••••••••"
               />
             </div>
           </div>
 
-          <button type="submit" className="w-full btn-primary !py-3 mt-6">
-            {isLogin ? 'Sign In' : 'Sign Up'}
+          <button type="submit" disabled={submitting} className="w-full btn-primary !py-3 mt-6 disabled:opacity-50 disabled:cursor-not-allowed">
+            {submitting ? (isLogin ? 'Signing In...' : 'Signing Up...') : (isLogin ? 'Sign In' : 'Sign Up')}
           </button>
         </form>
 

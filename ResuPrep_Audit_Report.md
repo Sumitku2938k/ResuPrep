@@ -520,7 +520,7 @@ Current Phase:
 Phase 1 — Foundation (API Client + Real Authentication)
 
 Current Checkpoint:
-Checkpoint 3 — AuthContext Integration (Completed ✅)
+Checkpoint 4 — Login / Signup Page Integration (Completed ✅)
 
 Completed:
 - Repository Audit ✅
@@ -529,12 +529,13 @@ Completed:
 - Checkpoint 1: Backend Authentication Verification ✅
 - Checkpoint 2: Frontend API Client Setup (src/api/client.js & src/api/auth.js) ✅
 - Checkpoint 3: AuthContext Integration (frontend/src/context/AuthContext.jsx) ✅
+- Checkpoint 4: Login / Signup Page Integration (frontend/src/pages/Login.jsx) ✅
 
 Next Task:
-Checkpoint 4: Wire Login & Signup UI Pages to AuthContext / Real API
+Checkpoint 5: Implement FE Protected Routes & Router Guards
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "feat(auth): refactor AuthContext to use real backend API and handle session bootstrap")
+Pending user commit approval (Suggested: "Phase 1 - Checkpoint 4: Integrate login and signup with real auth")
 
 Current Branch:
 main
