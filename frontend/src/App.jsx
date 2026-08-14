@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Chatbot from './components/Chatbot';
+import ProtectedRoute from './components/ProtectedRoute';
 
 const Home = lazy(() => import('./pages/Home'));
 const Analyzer = lazy(() => import('./pages/Analyzer'));
@@ -50,19 +51,26 @@ export default function App() {
         <Suspense fallback={<LoadingFallback />}>
           <AnimatePresence mode="wait">
             <Routes>
+              {/* Public Routes */}
               <Route path="/" element={<Home />} />
-              <Route path="/analyzer" element={<Analyzer />} />
-              <Route path="/jobs" element={<Jobs />} />
-              <Route path="/skills" element={<Skills />} />
-              <Route path="/builder" element={<Builder />} />
-              <Route path="/cover-letter" element={<CoverLetter />} />
-              <Route path="/templates" element={<Templates />} />
-              <Route path="/assessment" element={<Assessment />} />
-              <Route path="/faq" element={<FAQ />} />
-              <Route path="/feedback" element={<Feedback />} />
               <Route path="/about" element={<About />} />
+              <Route path="/faq" element={<FAQ />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/feedback" element={<Feedback />} />
               <Route path="/login" element={<Login />} />
-              <Route path="/mock-interview" element={<MockInterview />} />
+
+              {/* Protected Routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/analyzer" element={<Analyzer />} />
+                <Route path="/jobs" element={<Jobs />} />
+                <Route path="/skills" element={<Skills />} />
+                <Route path="/builder" element={<Builder />} />
+                <Route path="/cover-letter" element={<CoverLetter />} />
+                <Route path="/assessment" element={<Assessment />} />
+                <Route path="/mock-interview" element={<MockInterview />} />
+              </Route>
+
+              {/* Catch-all Route */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AnimatePresence>

@@ -520,7 +520,7 @@ Current Phase:
 Phase 1 — Foundation (API Client + Real Authentication)
 
 Current Checkpoint:
-Checkpoint 5 — Navbar + Real Logout Integration (Completed ✅)
+Checkpoint 6 — Protected Routes (Completed ✅)
 
 Completed:
 - Repository Audit ✅
@@ -531,12 +531,13 @@ Completed:
 - Checkpoint 3: AuthContext Integration (frontend/src/context/AuthContext.jsx) ✅
 - Checkpoint 4: Login / Signup Page Integration (frontend/src/pages/Login.jsx) ✅
 - Checkpoint 5: Navbar + Real Logout Integration (frontend/src/components/Navbar.jsx) ✅
+- Checkpoint 6: Protected Routes (frontend/src/components/ProtectedRoute.jsx) ✅
 
 Next Task:
-Checkpoint 6: Implement FE Protected Routes & Router Guards
+Checkpoint 7: Clean Up Legacy LocalStorage Auth Helpers & Phase 1 Final Audit
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 1 - Checkpoint 5: Integrate Navbar and real logout")
+Pending user commit approval (Suggested: "Phase 1 - Checkpoint 6: Add protected routes")
 
 Current Branch:
 main
