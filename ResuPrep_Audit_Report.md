@@ -4,7 +4,7 @@ overview: "Forensic audit of ResuPrep: the UI is a polished localStorage-only SP
 todos:
   - id: phase-1-auth-api
     content: "Phase 1: API client + real JWT auth (FE↔BE)"
-    status: pending
+    status: completed
   - id: phase-2-resume
     content: "Phase 2: Wire Resume Analyzer + history + file parse"
     status: pending
@@ -517,10 +517,10 @@ Why: The largest architectural break is the FE/BE disconnect. Backend auth, mode
 ## CURRENT PROJECT STATUS
 
 Current Phase:
-Phase 1 — Foundation (API Client + Real Authentication)
+Phase 1 — Foundation (API Client + Real Authentication) — COMPLETED ✅
 
 Current Checkpoint:
-Checkpoint 6 — Protected Routes (Completed ✅)
+Checkpoint 7 — Deprecate and Remove Fake Authentication (Completed ✅)
 
 Completed:
 - Repository Audit ✅
@@ -532,12 +532,19 @@ Completed:
 - Checkpoint 4: Login / Signup Page Integration (frontend/src/pages/Login.jsx) ✅
 - Checkpoint 5: Navbar + Real Logout Integration (frontend/src/components/Navbar.jsx) ✅
 - Checkpoint 6: Protected Routes (frontend/src/components/ProtectedRoute.jsx) ✅
+- Checkpoint 7: Deprecate and Remove Fake Authentication (frontend/src/services/storage.js) ✅
 
-Next Task:
-Checkpoint 7: Clean Up Legacy LocalStorage Auth Helpers & Phase 1 Final Audit
+Phase 1 Complete:
+- Real Express + Mongo + JWT auth connected to React UI
+- Session bootstrap via /auth/me cookie verification
+- Protected routing active for all user-sensitive pages
+- Zero legacy auth references remaining in frontend
+
+Next Phase:
+Phase 2 — Resume Pipeline (Analyzer + History + File Parse)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 1 - Checkpoint 6: Add protected routes")
+Pending user commit approval (Suggested: "Phase 1 - Checkpoint 7: Remove legacy frontend auth")
 
 Current Branch:
 main
