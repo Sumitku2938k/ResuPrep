@@ -1,8 +1,8 @@
-// ─── localStorage Service ───
-// All data is stored in the browser's localStorage. No backend needed.
+// ─── localStorage Service (Temporary mock data for unmigrated features) ───
+// NOTE: Authentication is handled by AuthContext and backend API (/api/v1/auth).
+// The helpers below remain only for features scheduled for migration in future phases.
 
 const KEYS = {
-  USER: 'ResuPrep_user',
   ANALYSES: 'ResuPrep_analyses',
   RESUMES: 'ResuPrep_resumes',
   COVER_LETTERS: 'ResuPrep_cover_letters',
@@ -26,29 +26,6 @@ function setItem(key, value) {
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-// ─── Auth (localStorage only) ───
-
-export function getUser() {
-  return getItem(KEYS.USER, null);
-}
-
-export function loginUser(email, password) {
-  // Simple local auth: store user in localStorage
-  const user = { id: generateId(), email, name: email.split('@')[0] };
-  setItem(KEYS.USER, user);
-  return user;
-}
-
-export function signupUser(name, email, password) {
-  const user = { id: generateId(), name, email };
-  setItem(KEYS.USER, user);
-  return user;
-}
-
-export function logoutUser() {
-  localStorage.removeItem(KEYS.USER);
 }
 
 // ─── Resume Analysis (ported from backend ai.service.js fallback) ───
