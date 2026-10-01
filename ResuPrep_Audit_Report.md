@@ -390,6 +390,63 @@ flowchart LR
 
 **Deps:** Phase 1 (for history). **Difficulty:** Medium.
 
+#### Phase 2 — Verified Backend API Contract
+
+##### 1. Analyze Resume
+- **Endpoint:** `POST /api/v1/resume/analyze`
+- **Auth:** Optional (`optionalAuth` middleware). Associates analysis with `req.user._id` if token/cookie valid; otherwise stores `user: null`.
+- **Content-Type:** `multipart/form-data` (file upload) or `application/json` (direct text).
+- **Multipart Fields:**
+  - `resume`: Binary file (`.pdf`, `.docx`). Max 5MB. Handled in-memory by Multer.
+  - `resumeText`: String (optional if file provided; required if no file). Min length 20 chars.
+  - `jobDescription`: String (required).
+- **Processing Pipeline:** `optionalAuth` → `upload.single('resume')` → `parseFile` (PDF/DOCX) → `ai.service` (OpenAI gpt-3.5-turbo with automatic deterministic fallback NLP) → MongoDB `ResumeAnalysis` model → `ApiResponse.success(res, { analysis })`.
+- **Success Response (200 OK):**
+  ```json
+  {
+    "success": true,
+    "message": "Resume analyzed successfully",
+    "data": {
+      "analysis": {
+        "_id": "6abe0477704b66a1f75c2461",
+        "user": "6abe...",
+        "resumeText": "...",
+        "jobDescription": "...",
+        "fileName": "resume.pdf",
+        "result": {
+          "compatibilityScore": 82,
+          "matchedKeywords": ["react", "node"],
+          "missingKeywords": ["docker"],
+          "skillGaps": ["Develop proficiency in docker"],
+          "improvementTips": ["Tailor your resume..."],
+          "summary": "Strong match! Your resume aligns well..."
+        },
+        "createdAt": "2026-10-01T...",
+        "updatedAt": "2026-10-01T..."
+      }
+    }
+  }
+  ```
+- **Error Codes:**
+  - `400 Bad Request`: `Job description is required`
+  - `400 Bad Request`: `Resume text is too short or empty. Upload a file or paste resume text.`
+  - `500 Server Error`: `Only PDF and DOCX files are allowed` (Multer rejection)
+  - `500 Server Error`: `Failed to parse file. Please ensure it is a valid PDF or DOCX.` (Parser failure)
+
+##### 2. Resume History API
+- **List User History:** `GET /api/v1/resume/history`
+  - Auth: Required (`protect`). Rejects unauthenticated with `401 Unauthorized`.
+  - Filter: Strictly scoped to `user: req.user._id`. Sorted by `createdAt: -1`. Excludes heavy text fields (`-resumeText -jobDescription`).
+  - Response (200 OK): `{ success: true, message: "Success", data: { analyses: [...] } }`.
+- **Get Single History Item:** `GET /api/v1/resume/history/:id`
+  - Auth: Required (`protect`). Scoped to `{ _id: req.params.id, user: req.user._id }`.
+  - Response (200 OK): `{ success: true, message: "Success", data: { analysis: {...} } }`.
+  - Error (404 Not Found): `Analysis not found` (also prevents accessing other users' records).
+- **Delete History Item:** `DELETE /api/v1/resume/history/:id`
+  - Auth: Required (`protect`). Scoped to `{ _id: req.params.id, user: req.user._id }`.
+  - Response (200 OK): `{ success: true, message: "Analysis deleted successfully", data: null }`.
+  - Error (404 Not Found): `Analysis not found`.
+
 ---
 
 ### Phase 3: Builder + Templates + Cover Letter
@@ -517,34 +574,23 @@ Why: The largest architectural break is the FE/BE disconnect. Backend auth, mode
 ## CURRENT PROJECT STATUS
 
 Current Phase:
-Phase 1 — Foundation (API Client + Real Authentication) — COMPLETED ✅
+Phase 2 — Resume Pipeline (Analyzer + History + File Parse)
 
 Current Checkpoint:
-Checkpoint 7 — Deprecate and Remove Fake Authentication (Completed ✅)
+Phase 2 Checkpoint 1 — Resume Backend Pipeline Audit & API Contract (Completed ✅)
 
 Completed:
 - Repository Audit ✅
 - Architecture Review ✅
 - Implementation Roadmap ✅
-- Checkpoint 1: Backend Authentication Verification ✅
-- Checkpoint 2: Frontend API Client Setup (src/api/client.js & src/api/auth.js) ✅
-- Checkpoint 3: AuthContext Integration (frontend/src/context/AuthContext.jsx) ✅
-- Checkpoint 4: Login / Signup Page Integration (frontend/src/pages/Login.jsx) ✅
-- Checkpoint 5: Navbar + Real Logout Integration (frontend/src/components/Navbar.jsx) ✅
-- Checkpoint 6: Protected Routes (frontend/src/components/ProtectedRoute.jsx) ✅
-- Checkpoint 7: Deprecate and Remove Fake Authentication (frontend/src/services/storage.js) ✅
+- Phase 1: Foundation (API Client + Real Authentication) — All 7 Checkpoints Complete ✅
+- Phase 2 Checkpoint 1: Resume Backend Pipeline Audit & API Contract Verification ✅
 
-Phase 1 Complete:
-- Real Express + Mongo + JWT auth connected to React UI
-- Session bootstrap via /auth/me cookie verification
-- Protected routing active for all user-sensitive pages
-- Zero legacy auth references remaining in frontend
-
-Next Phase:
-Phase 2 — Resume Pipeline (Analyzer + History + File Parse)
+Next Task:
+Phase 2 Checkpoint 2 — Resume API Service Layer (frontend/src/api/resume.js)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 1 - Checkpoint 7: Remove legacy frontend auth")
+Pending user commit approval (Suggested: "Phase 2 - Checkpoint 1: Document and verify resume API contract")
 
 Current Branch:
 main
