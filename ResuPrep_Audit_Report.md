@@ -447,6 +447,16 @@ flowchart LR
   - Response (200 OK): `{ success: true, message: "Analysis deleted successfully", data: null }`.
   - Error (404 Not Found): `Analysis not found`.
 
+##### 3. Checkpoint 2 — Resume API Service Layer (COMPLETED ✅)
+- **File Created:** `frontend/src/api/resume.js`
+- **Functions Implemented:**
+  - `analyzeResumeApi(data)`: Supports `FormData`, binary file `{ file, jobDescription }`, or plain text `{ resumeText, jobDescription }`.
+  - `getResumeHistoryApi()`: Exposes `GET /api/v1/resume/history`.
+  - `getResumeAnalysisByIdApi(id)`: Exposes `GET /api/v1/resume/history/:id`.
+  - `deleteResumeAnalysisApi(id)`: Exposes `DELETE /api/v1/resume/history/:id`.
+- **Architectural Guardrails:** Reuses `client.js` HTTP transport; no manual `Content-Type: multipart/form-data`; no frontend PDF/DOCX parsing; no localStorage resume persistence; credentials handled via shared client.
+- **Verification:** Vite production build PASSED; automated SDK runtime verification PASSED.
+
 ---
 
 ### Phase 3: Builder + Templates + Cover Letter
@@ -577,7 +587,7 @@ Current Phase:
 Phase 2 — Resume Pipeline (Analyzer + History + File Parse)
 
 Current Checkpoint:
-Phase 2 Checkpoint 1 — Resume Backend Pipeline Audit & API Contract (Completed ✅)
+Phase 2 Checkpoint 2 — Resume API Service Layer (Completed ✅)
 
 Completed:
 - Repository Audit ✅
@@ -585,12 +595,13 @@ Completed:
 - Implementation Roadmap ✅
 - Phase 1: Foundation (API Client + Real Authentication) — All 7 Checkpoints Complete ✅
 - Phase 2 Checkpoint 1: Resume Backend Pipeline Audit & API Contract Verification ✅
+- Phase 2 Checkpoint 2: Resume API Service Layer (frontend/src/api/resume.js) ✅
 
 Next Task:
-Phase 2 Checkpoint 2 — Resume API Service Layer (frontend/src/api/resume.js)
+Phase 2 Checkpoint 3 — Analyzer → Real Backend Integration (frontend/src/pages/Analyzer.jsx)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 2 - Checkpoint 1: Document and verify resume API contract")
+Pending user commit approval (Suggested: "Phase 2 - Checkpoint 2: Add Resume API service layer")
 
 Current Branch:
 main
