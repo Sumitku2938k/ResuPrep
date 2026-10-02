@@ -596,12 +596,33 @@ Completed:
 - Phase 1: Foundation (API Client + Real Authentication) — All 7 Checkpoints Complete ✅
 - Phase 2 Checkpoint 1: Resume Backend Pipeline Audit & API Contract Verification ✅
 - Phase 2 Checkpoint 2: Resume API Service Layer (frontend/src/api/resume.js) ✅
+- Phase 2 Checkpoint 3: Analyzer Upload → Real Backend Integration (frontend/src/pages/Analyzer.jsx) ✅
+
+### Phase 2 Checkpoint 3 Implementation & Verification Details
+1. **Analyzer Integration:**
+   - `frontend/src/pages/Analyzer.jsx` rewired to import and call `analyzeResumeApi` from `../api/resume`.
+   - File upload (PDF/DOCX) sends the genuine binary `File` object via `FormData` to `POST /api/v1/resume/analyze`.
+   - Plain-text resume input sends `{ resumeText, jobDescription }` to the same backend analysis endpoint.
+   - Job Description validated on frontend for user experience while backend remains authoritative.
+2. **Removed Legacy Simulation:**
+   - `storage.analyzeResume()` removed from active Analyzer flow.
+   - `file.text()` binary reading removed; document parsing handled strictly by backend (`fileParser.service.js`).
+   - Fake rotating intervals (`rotatingMessages`) removed in favor of truthful `"Analyzing resume..."` single-stage state.
+   - `Math.random()` and local keyword overlap simulation eliminated; score and insights are sourced directly from backend response.
+3. **UI & State Handling:**
+   - Loading state: Analyze button disabled with spinner; truthful status displayed.
+   - Error state: Dedicated glass error card rendered with normalized backend message and "Try Again" action; toast notifications on failure.
+   - Success state: Maps `res.data.analysis.result` directly into existing UI components (`ScoreChart`, matched keywords, missing keywords, skill gaps, improvement tips, summary).
+   - Reset action: Reset buttons on input panel and results panel clear file, text, results, error, and file input ref.
+4. **Verification:**
+   - Frontend Build: `npm run build` completed cleanly with exit code 0.
+   - Runtime Test Suite: `node backend/scripts/verify_analyzer_checkpoint3.js` executed 5/5 passed tests (Plain text analysis, PDF binary upload, validation error handling, anonymous upload, and result contract verification).
 
 Next Task:
-Phase 2 Checkpoint 3 — Analyzer → Real Backend Integration (frontend/src/pages/Analyzer.jsx)
+Phase 2 Checkpoint 4 — Analyzer Result Mapping + UI States
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 2 - Checkpoint 2: Add Resume API service layer")
+Pending user commit approval (Suggested: "Phase 2 - Checkpoint 3: Integrate Analyzer with real Resume API")
 
 Current Branch:
 main

@@ -1,18 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { analyzeResume } from '../services/storage';
+import { analyzeResumeApi } from '../api/resume';
 import ScoreChart from '../components/ScoreChart';
-import { HiUpload, HiDocumentText, HiRefresh, HiCheckCircle, HiXCircle, HiLightningBolt, HiQuestionMarkCircle } from 'react-icons/hi';
-
-const rotatingMessages = [
-  'Parsing your resume...',
-  'Running NLP analysis...',
-  'Extracting keywords...',
-  'Computing similarity scores...',
-  'Analyzing skill gaps...',
-  'Generating improvement tips...',
-];
+import { HiUpload, HiDocumentText, HiRefresh, HiCheckCircle, HiXCircle, HiLightningBolt, HiQuestionMarkCircle, HiX } from 'react-icons/hi';
 
 const sampleResume = `John Doe
 Full Stack Developer | john.doe@email.com | (555) 123-4567 | San Francisco, CA
@@ -66,7 +57,7 @@ export default function Analyzer() {
   const [jobDescription, setJobDescription] = useState('');
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [loadingMsg, setLoadingMsg] = useState('');
+  const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -78,6 +69,7 @@ export default function Analyzer() {
         return;
       }
       setFile(f);
+      setError(null);
       toast.success(`File "${f.name}" selected`);
     }
   };
@@ -91,9 +83,32 @@ export default function Analyzer() {
         toast.error('Only PDF and DOCX files are supported');
         return;
       }
+      if (f.size > 5 * 1024 * 1024) {
+        toast.error('File size must be under 5MB');
+        return;
+      }
       setFile(f);
+      setError(null);
       toast.success(`File "${f.name}" selected`);
     }
+  };
+
+  const handleClearFile = (e) => {
+    if (e) e.stopPropagation();
+    setFile(null);
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) fileInput.value = '';
+  };
+
+  const handleReset = () => {
+    setFile(null);
+    setResumeText('');
+    setJobDescription('');
+    setResult(null);
+    setError(null);
+    const fileInput = document.getElementById('fileInput');
+    if (fileInput) fileInput.value = '';
+    toast.success('Reset ready for new analysis');
   };
 
   const analyze = async () => {
@@ -107,29 +122,29 @@ export default function Analyzer() {
     }
 
     setLoading(true);
+    setError(null);
     setResult(null);
 
-    let msgIndex = 0;
-    setLoadingMsg(rotatingMessages[0]);
-    const interval = setInterval(() => {
-      msgIndex = (msgIndex + 1) % rotatingMessages.length;
-      setLoadingMsg(rotatingMessages[msgIndex]);
-    }, 1500);
-
     try {
-      let text = resumeText;
+      let response;
       if (file) {
-        text = await file.text();
+        response = await analyzeResumeApi({ file, jobDescription: jobDescription.trim() });
+      } else {
+        response = await analyzeResumeApi({ resumeText: resumeText.trim(), jobDescription: jobDescription.trim() });
       }
 
-      const analysisResult = analyzeResume(text, jobDescription);
+      const analysisResult = response?.data?.analysis?.result;
+      if (!analysisResult) {
+        throw new Error('Analysis result data was missing from server response');
+      }
 
       setResult(analysisResult);
       toast.success('Analysis complete!');
-    } catch (error) {
-      toast.error('Analysis failed. Please try again.');
+    } catch (err) {
+      const errMsg = err?.message || 'Analysis failed. Please try again.';
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
-      clearInterval(interval);
       setLoading(false);
     }
   };
@@ -166,10 +181,18 @@ export default function Analyzer() {
                 {file ? (
                   <div className="flex items-center justify-center gap-3">
                     <HiDocumentText className="text-primary-500 text-2xl" />
-                    <div>
+                    <div className="text-left">
                       <p className="text-sm font-medium text-slate-200">{file.name}</p>
                       <p className="text-xs text-slate-500">{(file.size / 1024).toFixed(1)} KB</p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={handleClearFile}
+                      className="ml-2 p-1 text-slate-400 hover:text-red-400 transition-colors"
+                      title="Remove file"
+                    >
+                      <HiX className="text-lg" />
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -184,14 +207,28 @@ export default function Analyzer() {
                 <p className="text-xs text-slate-500 mb-2">Or paste resume text:</p>
                 <textarea
                   value={resumeText}
-                  onChange={(e) => setResumeText(e.target.value)}
+                  onChange={(e) => {
+                    setResumeText(e.target.value);
+                    setError(null);
+                  }}
                   placeholder="Paste your resume text here..."
                   rows={5}
                   className="glow-input resize-none text-sm p-2"
                 />
               </div>
 
-              <button onClick={() => { setResumeText(sampleResume); setFile(null); toast.success('Sample resume loaded'); }} className="mt-3 text-xs text-primary-400 hover:text-primary-300 transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  setResumeText(sampleResume);
+                  setFile(null);
+                  setError(null);
+                  const fileInput = document.getElementById('fileInput');
+                  if (fileInput) fileInput.value = '';
+                  toast.success('Sample resume loaded');
+                }}
+                className="mt-3 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
                 ⚡ Load Sample Resume
               </button>
             </div>
@@ -203,33 +240,57 @@ export default function Analyzer() {
               </h3>
               <textarea
                 value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
+                onChange={(e) => {
+                  setJobDescription(e.target.value);
+                  setError(null);
+                }}
                 placeholder="Paste the target job description here..."
                 rows={8}
                 className="glow-input resize-none text-sm p-2"
               />
-              <button onClick={() => { setJobDescription(sampleJD); toast.success('Sample JD loaded'); }} className="mt-3 text-xs text-primary-400 hover:text-primary-300 transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  setJobDescription(sampleJD);
+                  setError(null);
+                  toast.success('Sample JD loaded');
+                }}
+                className="mt-3 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+              >
                 ⚡ Load Sample JD
               </button>
             </div>
 
-            {/* Analyze Button */}
-            <button
-              onClick={analyze}
-              disabled={loading}
-              className="w-full btn-primary text-lg !py-4 flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  {loadingMsg}
-                </>
-              ) : (
-                <>
-                  <HiLightningBolt /> Analyze Now
-                </>
+            {/* Analyze & Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={analyze}
+                disabled={loading}
+                className="flex-1 btn-primary text-lg !py-4 flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Analyzing resume...
+                  </>
+                ) : (
+                  <>
+                    <HiLightningBolt /> Analyze Now
+                  </>
+                )}
+              </button>
+              {(file || resumeText || jobDescription || result || error) && (
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={loading}
+                  className="px-4 btn-secondary text-sm flex items-center justify-center gap-1.5 hover:text-red-400 transition-colors disabled:opacity-50"
+                  title="Reset all inputs"
+                >
+                  <HiRefresh /> Reset
+                </button>
               )}
-            </button>
+            </div>
           </div>
 
           {/* Right: Results Panel */}
@@ -244,11 +305,32 @@ export default function Analyzer() {
                   className="glass-card p-12 flex flex-col items-center justify-center min-h-[400px]"
                 >
                   <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-6" />
-                  <p className="text-slate-300 font-medium animate-pulse">{loadingMsg}</p>
+                  <p className="text-slate-300 font-medium">Analyzing resume against job description...</p>
+                  <p className="text-xs text-slate-500 mt-2">Extracting skills, computing compatibility & generating tips</p>
                 </motion.div>
               )}
 
-              {!loading && !result && (
+              {!loading && error && !result && (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass-card p-8 border-red-500/30 flex flex-col items-center justify-center min-h-[400px] text-center"
+                >
+                  <HiXCircle className="text-5xl text-red-400 mb-4" />
+                  <h3 className="text-lg font-bold text-slate-200 mb-2">Analysis Failed</h3>
+                  <p className="text-sm text-red-300 max-w-md mb-6">{error}</p>
+                  <button
+                    type="button"
+                    onClick={analyze}
+                    className="btn-primary text-sm !py-2 px-6 flex items-center gap-2"
+                  >
+                    <HiRefresh /> Try Again
+                  </button>
+                </motion.div>
+              )}
+
+              {!loading && !result && !error && (
                 <motion.div
                   key="empty"
                   initial={{ opacity: 0 }}
@@ -268,6 +350,18 @@ export default function Analyzer() {
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-6"
                 >
+                  {/* Result Header Action */}
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Analysis Result</span>
+                    <button
+                      type="button"
+                      onClick={handleReset}
+                      className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1 transition-colors"
+                    >
+                      <HiRefresh /> New Analysis
+                    </button>
+                  </div>
+
                   {/* Score */}
                   <div className="glass-card p-6 flex flex-col items-center">
                     <ScoreChart score={result.compatibilityScore} size={180} />
