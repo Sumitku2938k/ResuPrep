@@ -5,18 +5,24 @@ import { Doughnut } from 'react-chartjs-2';
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function ScoreChart({ score = 0, size = 200 }) {
+  const numericScore = typeof score === 'number' && !isNaN(score) && isFinite(score)
+    ? Math.max(0, Math.min(100, Math.round(score)))
+    : (typeof score === 'string' && !isNaN(Number(score)) && isFinite(Number(score)))
+      ? Math.max(0, Math.min(100, Math.round(Number(score))))
+      : 0;
+
   const getColor = (s) => {
     if (s >= 75) return ['#10b981', 'rgba(16, 185, 129, 0.1)'];
     if (s >= 50) return ['#f59e0b', 'rgba(245, 158, 11, 0.1)'];
     return ['#ef4444', 'rgba(239, 68, 68, 0.1)'];
   };
 
-  const [color, bgColor] = getColor(score);
+  const [color, bgColor] = getColor(numericScore);
 
   const data = {
     datasets: [
       {
-        data: [score, 100 - score],
+        data: [numericScore, 100 - numericScore],
         backgroundColor: [color, bgColor],
         borderWidth: 0,
         cutout: '78%',
@@ -49,8 +55,8 @@ export default function ScoreChart({ score = 0, size = 200 }) {
     <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <Doughnut data={data} options={options} />
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-heading font-black" style={{ color }}>{score}%</span>
-        <span className="text-xs text-slate-400 font-medium">{getLabel(score)}</span>
+        <span className="text-4xl font-heading font-black" style={{ color }}>{numericScore}%</span>
+        <span className="text-xs text-slate-400 font-medium">{getLabel(numericScore)}</span>
       </div>
     </div>
   );
