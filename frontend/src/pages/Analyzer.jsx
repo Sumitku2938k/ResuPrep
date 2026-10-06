@@ -52,6 +52,73 @@ Nice to have:
 • Open source contributions
 • Mentoring or leadership experience`;
 
+/**
+ * Safely validate and normalize the backend analysis response.
+ * Preserves the backend response as the authoritative source of truth.
+ * Guards against malformed data, non-numeric scores, and missing arrays.
+ */
+function normalizeAnalysisResult(rawResult) {
+  if (!rawResult || typeof rawResult !== 'object') {
+    throw new Error('We received an unexpected analysis response. Please try again.');
+  }
+
+  // Validate score: must be a number or numeric string between 0 and 100
+  const rawScore = rawResult.compatibilityScore;
+  if (rawScore === undefined || rawScore === null) {
+    throw new Error('We received an unexpected analysis response (missing score). Please try again.');
+  }
+
+  const parsedScore = typeof rawScore === 'number'
+    ? rawScore
+    : typeof rawScore === 'string' && !isNaN(Number(rawScore))
+      ? Number(rawScore)
+      : NaN;
+
+  if (isNaN(parsedScore) || !isFinite(parsedScore) || parsedScore < 0 || parsedScore > 100) {
+    throw new Error('We received an unexpected analysis response (invalid score). Please try again.');
+  }
+
+  // Array validations: ensure clean arrays without creating artificial items
+  const matchedKeywords = Array.isArray(rawResult.matchedKeywords)
+    ? rawResult.matchedKeywords.filter((k) => typeof k === 'string' && k.trim().length > 0)
+    : [];
+
+  const missingKeywords = Array.isArray(rawResult.missingKeywords)
+    ? rawResult.missingKeywords.filter((k) => typeof k === 'string' && k.trim().length > 0)
+    : [];
+
+  const skillGaps = Array.isArray(rawResult.skillGaps)
+    ? rawResult.skillGaps.filter((g) => typeof g === 'string' && g.trim().length > 0)
+    : [];
+
+  const improvementTips = Array.isArray(rawResult.improvementTips)
+    ? rawResult.improvementTips.filter((t) => typeof t === 'string' && t.trim().length > 0)
+    : [];
+
+  const summary = typeof rawResult.summary === 'string' ? rawResult.summary.trim() : '';
+
+  let interviewQuestions = null;
+  if (rawResult.interviewQuestions && typeof rawResult.interviewQuestions === 'object') {
+    const iq = rawResult.interviewQuestions;
+    const technical = Array.isArray(iq.technical) ? iq.technical.filter((q) => typeof q === 'string') : [];
+    const hr = Array.isArray(iq.hr) ? iq.hr.filter((q) => typeof q === 'string') : [];
+    const project = Array.isArray(iq.project) ? iq.project.filter((q) => typeof q === 'string') : [];
+    if (technical.length > 0 || hr.length > 0 || project.length > 0) {
+      interviewQuestions = { technical, hr, project };
+    }
+  }
+
+  return {
+    compatibilityScore: Math.round(parsedScore),
+    matchedKeywords,
+    missingKeywords,
+    skillGaps,
+    improvementTips,
+    summary,
+    interviewQuestions,
+  };
+}
+
 export default function Analyzer() {
   const [resumeText, setResumeText] = useState('');
   const [jobDescription, setJobDescription] = useState('');
@@ -60,6 +127,15 @@ export default function Analyzer() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+
+  const isResultEmpty = Boolean(
+    result &&
+    (!result.matchedKeywords || result.matchedKeywords.length === 0) &&
+    (!result.missingKeywords || result.missingKeywords.length === 0) &&
+    (!result.skillGaps || result.skillGaps.length === 0) &&
+    (!result.improvementTips || result.improvementTips.length === 0) &&
+    !result.summary
+  );
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0];
@@ -133,12 +209,18 @@ export default function Analyzer() {
         response = await analyzeResumeApi({ resumeText: resumeText.trim(), jobDescription: jobDescription.trim() });
       }
 
-      const analysisResult = response?.data?.analysis?.result;
-      if (!analysisResult) {
-        throw new Error('Analysis result data was missing from server response');
+      if (!response || typeof response !== 'object') {
+        throw new Error('We received an unexpected analysis response. Please try again.');
       }
 
-      setResult(analysisResult);
+      const rawResult = response?.data?.analysis?.result;
+      if (!rawResult || typeof rawResult !== 'object') {
+        throw new Error('We received an unexpected analysis response. Please try again.');
+      }
+
+      const validatedResult = normalizeAnalysisResult(rawResult);
+
+      setResult(validatedResult);
       toast.success('Analysis complete!');
     } catch (err) {
       const errMsg = err?.message || 'Analysis failed. Please try again.';
@@ -362,10 +444,16 @@ export default function Analyzer() {
                     </button>
                   </div>
 
-                  {/* Score */}
-                  <div className="glass-card p-6 flex flex-col items-center">
+                  {/* Score & Summary */}
+                  <div className="glass-card p-6 flex flex-col items-center text-center">
                     <ScoreChart score={result.compatibilityScore} size={180} />
-                    <p className="text-sm text-slate-400 mt-2">{result.summary}</p>
+                    {result.summary ? (
+                      <p className="text-sm text-slate-400 mt-3 max-w-lg">{result.summary}</p>
+                    ) : isResultEmpty ? (
+                      <p className="text-sm text-slate-400 mt-3 max-w-lg">
+                        No detailed keywords, skill gaps, or recommendations were found for this comparison.
+                      </p>
+                    ) : null}
                   </div>
 
                   {/* Matched Keywords */}
