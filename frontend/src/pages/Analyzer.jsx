@@ -1,9 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { analyzeResumeApi } from '../api/resume';
+import { analyzeResumeApi, getResumeHistoryApi, deleteResumeAnalysisApi } from '../api/resume';
 import ScoreChart from '../components/ScoreChart';
-import { HiUpload, HiDocumentText, HiRefresh, HiCheckCircle, HiXCircle, HiLightningBolt, HiQuestionMarkCircle, HiX } from 'react-icons/hi';
+import {
+  HiUpload,
+  HiDocumentText,
+  HiRefresh,
+  HiCheckCircle,
+  HiXCircle,
+  HiLightningBolt,
+  HiQuestionMarkCircle,
+  HiX,
+  HiClock,
+  HiTrash,
+  HiEye,
+} from 'react-icons/hi';
 
 const sampleResume = `John Doe
 Full Stack Developer | john.doe@email.com | (555) 123-4567 | San Francisco, CA
@@ -127,6 +139,68 @@ export default function Analyzer() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(null);
+  const [selectedHistoryId, setSelectedHistoryId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      const res = await getResumeHistoryApi();
+      if (res?.success && Array.isArray(res?.data?.analyses)) {
+        setHistory(res.data.analyses);
+      } else {
+        setHistory([]);
+      }
+    } catch (err) {
+      setHistoryError(err?.message || 'Failed to load analysis history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const handleDeleteHistory = async (e, id) => {
+    e.stopPropagation();
+    if (!id) return;
+    setDeletingId(id);
+    try {
+      const res = await deleteResumeAnalysisApi(id);
+      if (res?.success) {
+        setHistory((prev) => prev.filter((item) => item._id !== id));
+        toast.success('Analysis deleted from history');
+        if (selectedHistoryId === id) {
+          setSelectedHistoryId(null);
+        }
+      } else {
+        toast.error(res?.message || 'Failed to delete analysis');
+      }
+    } catch (err) {
+      toast.error(err?.message || 'Failed to delete analysis');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleSelectHistory = (item) => {
+    if (!item?.result) return;
+    try {
+      const validated = normalizeAnalysisResult(item.result);
+      setResult(validated);
+      setSelectedHistoryId(item._id);
+      setError(null);
+      toast.success(`Loaded analysis from ${new Date(item.createdAt).toLocaleDateString()}`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      toast.error('Could not display this saved analysis');
+    }
+  };
 
   const isResultEmpty = Boolean(
     result &&
@@ -182,6 +256,7 @@ export default function Analyzer() {
     setJobDescription('');
     setResult(null);
     setError(null);
+    setSelectedHistoryId(null);
     const fileInput = document.getElementById('fileInput');
     if (fileInput) fileInput.value = '';
     toast.success('Reset ready for new analysis');
@@ -221,7 +296,9 @@ export default function Analyzer() {
       const validatedResult = normalizeAnalysisResult(rawResult);
 
       setResult(validatedResult);
+      setSelectedHistoryId(response?.data?.analysis?._id || null);
       toast.success('Analysis complete!');
+      fetchHistory();
     } catch (err) {
       const errMsg = err?.message || 'Analysis failed. Please try again.';
       setError(errMsg);
@@ -563,6 +640,143 @@ export default function Analyzer() {
               )}
             </AnimatePresence>
           </div>
+        </div>
+
+        {/* Analysis History Section */}
+        <div className="mt-14 pt-10 border-t border-dark-300/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl font-heading font-black flex items-center gap-2">
+                <HiClock className="text-primary-500" /> Analysis <span className="gradient-text">History</span>
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                Your past resume analyses saved securely in your account.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchHistory}
+              disabled={historyLoading}
+              className="btn-secondary text-xs sm:text-sm flex items-center gap-1.5 px-3 py-2 self-start sm:self-auto disabled:opacity-50"
+              title="Refresh history"
+            >
+              <HiRefresh className={historyLoading ? 'animate-spin' : ''} /> Refresh History
+            </button>
+          </div>
+
+          {/* Loading State */}
+          {historyLoading && history.length === 0 && (
+            <div className="glass-card p-10 flex flex-col items-center justify-center text-center">
+              <div className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-3" />
+              <p className="text-slate-300 text-sm font-medium">Loading your analysis history...</p>
+            </div>
+          )}
+
+          {/* Error State */}
+          {!historyLoading && historyError && (
+            <div className="glass-card p-8 border-red-500/30 text-center">
+              <HiXCircle className="text-4xl text-red-400 mx-auto mb-2" />
+              <p className="text-red-300 text-sm mb-4">{historyError}</p>
+              <button
+                type="button"
+                onClick={fetchHistory}
+                className="btn-primary text-xs px-4 py-2"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+
+          {/* Empty State */}
+          {!historyLoading && !historyError && history.length === 0 && (
+            <div className="glass-card p-10 text-center">
+              <HiDocumentText className="text-4xl text-slate-600 mx-auto mb-2" />
+              <p className="text-slate-300 font-medium">No previous analyses found</p>
+              <p className="text-slate-500 text-xs mt-1 max-w-md mx-auto">
+                Upload a resume and job description above to generate and save your first analysis.
+              </p>
+            </div>
+          )}
+
+          {/* History Grid */}
+          {!historyError && history.length > 0 && (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {history.map((item) => {
+                const score = item.result?.compatibilityScore ?? 0;
+                const scoreColor =
+                  score >= 75
+                    ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                    : score >= 50
+                      ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                      : 'text-red-400 border-red-500/30 bg-red-500/10';
+                const isSelected = selectedHistoryId === item._id;
+
+                return (
+                  <div
+                    key={item._id}
+                    className={`glass-card p-5 transition-all flex flex-col justify-between ${
+                      isSelected ? 'border-primary-500 ring-1 ring-primary-500' : 'hover:border-primary-500/40'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <HiDocumentText className="text-primary-400 text-lg flex-shrink-0" />
+                          <span
+                            className="text-sm font-semibold text-slate-200 truncate"
+                            title={item.fileName || 'Text Resume Analysis'}
+                          >
+                            {item.fileName || 'Text Resume Analysis'}
+                          </span>
+                        </div>
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${scoreColor}`}>
+                          {score}%
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-slate-400 line-clamp-2 mb-4">
+                        {item.result?.summary || 'No summary available.'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-700/50 text-xs">
+                      <span className="text-slate-500 flex items-center gap-1">
+                        <HiClock className="text-slate-500 text-xs" />
+                        {new Date(item.createdAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectHistory(item)}
+                          className="text-primary-400 hover:text-primary-300 font-medium flex items-center gap-1 transition-colors px-2 py-1 rounded hover:bg-primary-500/10"
+                          title="View this analysis in result panel"
+                        >
+                          <HiEye /> View
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteHistory(e, item._id)}
+                          disabled={deletingId === item._id}
+                          className="text-slate-400 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-500/10 disabled:opacity-50"
+                          title="Delete this analysis"
+                        >
+                          {deletingId === item._id ? (
+                            <div className="w-3.5 h-3.5 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <HiTrash className="text-sm" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
