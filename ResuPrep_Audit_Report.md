@@ -598,30 +598,34 @@ Completed:
 - Phase 2 Checkpoint 2: Resume API Service Layer (frontend/src/api/resume.js) ✅
 - Phase 2 Checkpoint 3: Analyzer Upload → Real Backend Integration (frontend/src/pages/Analyzer.jsx) ✅
 - Phase 2 Checkpoint 4: Analyzer Result Mapping + UI States (frontend/src/pages/Analyzer.jsx, ScoreChart.jsx) ✅
+- Phase 2 Checkpoint 5: Resume History Integration (frontend/src/pages/Analyzer.jsx) ✅
 
-### Phase 2 Checkpoint 4 Implementation & Verification Details
-1. **Result Field Mapping & Normalization:**
-   - Sourced all results directly from `response.data.analysis.result` via `normalizeAnalysisResult()`.
-   - `compatibilityScore`: Validated as finite number between 0 and 100; strings parsed safely; invalid or out-of-bound values trigger malformed error.
-   - `matchedKeywords` & `missingKeywords`: Guaranteed array types; non-array inputs cleanly fall back to `[]` without throwing `.map` exceptions.
-   - `skillGaps` & `improvementTips`: Array verified and sanitized of empty/non-string items.
-   - `summary`: String verified and displayed directly under `ScoreChart`.
-   - `interviewQuestions`: Safely preserved if provided by backend; omitted gracefully if absent.
-2. **UI States & Safety:**
-   - **ScoreChart Defensive Hardening:** Added bounds clamping (`0` to `100`), `NaN` checks, and safe fallback in `ScoreChart.jsx`.
-   - **Empty State (`isResultEmpty`):** When response is valid but contains no keywords, gaps, or tips, renders a truthful message instead of broken empty cards.
-   - **Malformed Response Protection:** Null, undefined, missing score, or non-object payloads cleanly rejected with user-safe message (*"We received an unexpected analysis response. Please try again."*) and recovery via "Try Again" retry action.
-   - **Result Refresh:** Submitting a new analysis clears previous results, errors, and loading state so stale data is never mixed with new results.
-3. **Verification:**
-   - Frontend Build: `npm run build` compiled cleanly with exit code `0` in `10.88s`.
-   - Static Verification: No `storage.analyzeResume`, `file.text()`, `Math.random()`, or fake NLP simulation in active Analyzer path.
-   - Runtime Test Suite: `node backend/scripts/verify_analyzer_checkpoint4.js` executed 7/7 passed tests (full payload mapping, score chart defensive clamping, array validation, empty result handling, malformed response rejection, result refresh, and live backend integration).
+### Phase 2 Checkpoint 5 Implementation & Verification Details
+1. **Resume History Architecture:**
+   - Sourced all history directly from MongoDB via `getResumeHistoryApi()` (`GET /api/v1/resume/history`).
+   - Integrated deletion via `deleteResumeAnalysisApi(id)` (`DELETE /api/v1/resume/history/:id`).
+   - History loads automatically on mount and refreshes immediately after each successful analysis.
+   - User selection/open feature: clicking "View" on any history item loads its stored analysis into the main results panel (`ScoreChart`, keywords, gaps, tips, summary) via `normalizeAnalysisResult()`.
+2. **State & UI Handling:**
+   - Loading state: Sleek glass spinner card while loading history.
+   - Error state: Glass error card with user-safe error message and "Try Again" retry action.
+   - Empty state: Clean empty card prompting the user to upload their first resume.
+   - History cards: Show file name/source, formatted date, score badge, summary snippet, "View" action, and "Delete" button with individual deletion spinner.
+3. **Security & User Isolation:**
+   - Server-enforced ownership: `protect` middleware extracts `req.user._id` from validated token/cookie.
+   - Queries and deletions scoped strictly by `{ user: req.user._id }`.
+   - Verified that User B cannot view or delete analyses belonging to User A.
+   - Verified that unauthenticated requests to `/resume/history` receive 401 Unauthorized.
+4. **Verification:**
+   - Frontend Build: `npm run build` compiled cleanly with exit code `0` in `26.99s`.
+   - Static Verification: Zero `localStorage` or `storage.` references in active Analyzer flow.
+   - Runtime Test Suite: `node backend/scripts/verify_resume_history_checkpoint5.js` executed 6/6 passed tests (unauthenticated rejection, multi-item creation, newest-first ordering, user isolation, ownership-enforced deletion, and MongoDB refresh persistence).
 
 Next Task:
-Phase 2 Checkpoint 5 — Resume History Integration
+Phase 2 Checkpoint 6 — Remove Legacy Resume Mock/LocalStorage Logic
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 2 - Checkpoint 4: Map Resume analysis results and UI states")
+Pending user commit approval (Suggested: "Phase 2 - Checkpoint 5: Integrate MongoDB-backed resume history")
 
 Current Branch:
 main
