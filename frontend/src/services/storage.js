@@ -1,9 +1,9 @@
 // ─── localStorage Service (Temporary mock data for unmigrated features) ───
 // NOTE: Authentication is handled by AuthContext and backend API (/api/v1/auth).
+// NOTE: Resume Analysis & History are handled by resumeApi (/api/v1/resume) and MongoDB.
 // The helpers below remain only for features scheduled for migration in future phases.
 
 const KEYS = {
-  ANALYSES: 'ResuPrep_analyses',
   RESUMES: 'ResuPrep_resumes',
   COVER_LETTERS: 'ResuPrep_cover_letters',
   FEEDBACK: 'ResuPrep_feedback',
@@ -26,92 +26,6 @@ function setItem(key, value) {
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
-
-// ─── Resume Analysis (ported from backend ai.service.js fallback) ───
-
-const commonSkills = [
-  'javascript', 'python', 'react', 'node', 'express', 'mongodb', 'sql', 'html', 'css',
-  'typescript', 'java', 'docker', 'kubernetes', 'aws', 'git', 'agile', 'scrum',
-  'api', 'rest', 'graphql', 'testing', 'ci/cd', 'linux', 'angular', 'vue',
-  'machine learning', 'data', 'analytics', 'communication', 'leadership', 'teamwork',
-  'problem-solving', 'management', 'excel', 'figma', 'design', 'ux', 'ui',
-  'nextjs', 'tailwind', 'sass', 'webpack', 'vite', 'redis', 'postgresql',
-  'firebase', 'azure', 'gcp', 'terraform', 'jenkins', 'nginx',
-];
-
-export function analyzeResume(resumeText, jobDescription) {
-  const resumeTextLower = resumeText.toLowerCase();
-  const jdTextLower = jobDescription.toLowerCase();
-
-  // Find standard skills first (handles multi-word, special chars, short words like 'ui')
-  const foundStandardSkills = commonSkills.filter(skill => {
-    // Regex matches the skill with word/punctuation boundaries
-    const escapedSkill = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?:^|\\W)${escapedSkill}(?:$|\\W)`);
-    return regex.test(jdTextLower);
-  });
-
-  // Extract other long words (length > 4) from JD
-  const jdWords = jdTextLower.split(/[^a-z0-9+#-]+/).filter(w => w.length > 4);
-  const additionalKeywords = [...new Set(jdWords)].filter(w => !commonSkills.includes(w));
-
-  const jdKeywords = [...new Set([...foundStandardSkills, ...additionalKeywords])].slice(0, 20);
-
-  const matched = jdKeywords.filter(k => {
-    const escapedK = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`(?:^|\\W)${escapedK}(?:$|\\W)`);
-    return regex.test(resumeTextLower);
-  });
-  const missing = jdKeywords.filter(k => !matched.includes(k));
-
-  const score = jdKeywords.length > 0
-    ? Math.min(95, Math.round((matched.length / jdKeywords.length) * 100) + Math.floor(Math.random() * 10))
-    : 50;
-
-  const result = {
-    compatibilityScore: score,
-    matchedKeywords: matched.slice(0, 10),
-    missingKeywords: missing.slice(0, 10),
-    skillGaps: missing.slice(0, 5).map(k => `Develop proficiency in ${k}`),
-    improvementTips: [
-      'Tailor your resume to match the job description keywords',
-      'Add quantifiable achievements (e.g., "Increased efficiency by 30%")',
-      'Use action verbs to start bullet points',
-      'Keep your resume to 1-2 pages',
-      'Include a professional summary at the top',
-    ],
-    summary: score >= 75
-      ? 'Strong match! Your resume aligns well with the job requirements.'
-      : score >= 50
-        ? 'Moderate match. Consider adding more relevant keywords and experience.'
-        : 'Low match. Significant improvements needed to align with this role.',
-    interviewQuestions: {
-      technical: matched.slice(0, 3).map(k => `Can you explain your experience working with ${k}?`).concat(
-        missing.slice(0, 2).map(k => `How would you approach learning ${k} for this role?`)
-      ),
-      hr: [
-        'Tell me about a time you had to overcome a significant challenge.',
-        'Where do you see your career heading in the next few years?',
-        'How do you prioritize tasks when you have multiple tight deadlines?'
-      ],
-      project: [
-        'Walk me through a complex project you recently completed from start to finish.',
-        'Describe a time when a project\'s requirements changed drastically. How did you adapt?'
-      ]
-    }
-  };
-
-  // Save to history
-  const history = getItem(KEYS.ANALYSES, []);
-  history.unshift({ id: generateId(), date: new Date().toISOString(), result });
-  setItem(KEYS.ANALYSES, history.slice(0, 50));
-
-  return result;
-}
-
-export function getAnalysisHistory() {
-  return getItem(KEYS.ANALYSES, []);
 }
 
 // ─── Cover Letter ───
