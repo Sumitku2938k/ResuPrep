@@ -587,7 +587,7 @@ Current Phase:
 Phase 2 — Resume Pipeline (Analyzer + History + File Parse)
 
 Current Checkpoint:
-Phase 2 Checkpoint 2 — Resume API Service Layer (Completed ✅)
+Phase 2 Checkpoint 6 — Remove Legacy Resume Mock/LocalStorage Logic (Completed ✅)
 
 Completed:
 - Repository Audit ✅
@@ -599,6 +599,7 @@ Completed:
 - Phase 2 Checkpoint 3: Analyzer Upload → Real Backend Integration (frontend/src/pages/Analyzer.jsx) ✅
 - Phase 2 Checkpoint 4: Analyzer Result Mapping + UI States (frontend/src/pages/Analyzer.jsx, ScoreChart.jsx) ✅
 - Phase 2 Checkpoint 5: Resume History Integration (frontend/src/pages/Analyzer.jsx) ✅
+- Phase 2 Checkpoint 6: Remove Legacy Resume Mock/LocalStorage Logic (frontend/src/services/storage.js) ✅
 
 ### Phase 2 Checkpoint 5 Implementation & Verification Details
 1. **Resume History Architecture:**
@@ -621,11 +622,39 @@ Completed:
    - Static Verification: Zero `localStorage` or `storage.` references in active Analyzer flow.
    - Runtime Test Suite: `node backend/scripts/verify_resume_history_checkpoint5.js` executed 6/6 passed tests (unauthenticated rejection, multi-item creation, newest-first ordering, user isolation, ownership-enforced deletion, and MongoDB refresh persistence).
 
+### Phase 2 Checkpoint 6 Implementation & Verification Details
+1. **Obsolete Resume Mock & LocalStorage Logic Removed:**
+   - Removed `KEYS.ANALYSES` from `frontend/src/services/storage.js`.
+   - Removed `commonSkills` hardcoded keyword dictionary from `frontend/src/services/storage.js`.
+   - Removed `analyzeResume(resumeText, jobDescription)` legacy client-side NLP mock and random jitter from `frontend/src/services/storage.js`.
+   - Removed `getAnalysisHistory()` localStorage history reader from `frontend/src/services/storage.js`.
+2. **Future-Phase & Unrelated Storage Helpers Preserved:**
+   - Preserved `KEYS.RESUMES`, `KEYS.COVER_LETTERS`, `KEYS.FEEDBACK`.
+   - Preserved core storage primitives `getItem`, `setItem`, `generateId`.
+   - Preserved Cover Letter persistence helpers: `saveCoverLetter`, `getCoverLetters` (Phase 3).
+   - Preserved Feedback persistence helpers: `saveFeedback`, `getFeedback` (Phase 4).
+   - Preserved Resume Builder persistence helpers: `saveBuiltResume`, `getBuiltResumes` (Phase 3).
+3. **Target Architecture Verified:**
+   - Active Analyzer flow: `Analyzer.jsx` → `resumeApi.analyzeResumeApi()` → `POST /api/v1/resume/analyze` → Backend Multer + FileParser + AI/Deterministic Fallback → MongoDB `ResumeAnalysis`.
+   - Active History flow: `Analyzer.jsx` → `resumeApi.getResumeHistoryApi()` → `GET /api/v1/resume/history` → MongoDB `ResumeAnalysis`.
+   - Active Deletion flow: `Analyzer.jsx` → `resumeApi.deleteResumeAnalysisApi()` → `DELETE /api/v1/resume/history/:id` → MongoDB `ResumeAnalysis`.
+   - Zero client-side localStorage fallback or mock data generation in active Resume pipeline.
+4. **Dependency & Import Verification:**
+   - Verified zero call sites or imports of `analyzeResume` or `getAnalysisHistory` across `frontend/src`.
+   - Only `Feedback.jsx` imports from `frontend/src/services/storage.js` (`saveFeedback`, `getFeedback`), which remain intact.
+5. **Build & Runtime Verification:**
+   - Static Verification: PASS.
+   - Import/Dependency Verification: PASS.
+   - Build Verification: PASS (`npm run build` compiled Vite bundle cleanly in 12.68s, exit code 0).
+   - Runtime Verification: PASS (`verify_analyzer_checkpoint4.js` 7/7 tests passed; `verify_resume_history_checkpoint5.js` 6/6 tests passed).
+6. **Known Limitations:**
+   - Full end-to-end integration across all edge cases is scheduled for Phase 2 Checkpoint 7.
+
 Next Task:
-Phase 2 Checkpoint 6 — Remove Legacy Resume Mock/LocalStorage Logic
+Phase 2 - Checkpoint 7: Full Phase 2 End-to-End Verification
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 2 - Checkpoint 5: Integrate MongoDB-backed resume history")
+Pending user commit approval (Suggested: "Phase 2 - Checkpoint 6: Remove legacy Resume mock and storage logic")
 
 Current Branch:
 main
