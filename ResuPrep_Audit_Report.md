@@ -584,50 +584,168 @@ Why: The largest architectural break is the FE/BE disconnect. Backend auth, mode
 ## CURRENT PROJECT STATUS
 
 Current Phase:
-Phase 2 — Resume Pipeline (Analyzer + History + File Parse) — Completed ✅
+Phase 3 — Builder + Templates + Cover Letter (In Progress)
 
 Current Checkpoint:
-Phase 2 Checkpoint 7 — Full Phase 2 End-to-End Verification (Completed ✅)
+Phase 3 Checkpoint 1 — Backend Contract Audit (Completed ✅)
 
 Completed:
 - Repository Audit ✅
 - Architecture Review ✅
 - Implementation Roadmap ✅
 - Phase 1: Foundation (API Client + Real Authentication) — All 7 Checkpoints Complete ✅
-- Phase 2 Checkpoint 1: Resume Backend Pipeline Audit & API Contract Verification ✅
-- Phase 2 Checkpoint 2: Resume API Service Layer (frontend/src/api/resume.js) ✅
-- Phase 2 Checkpoint 3: Analyzer Upload → Real Backend Integration (frontend/src/pages/Analyzer.jsx) ✅
-- Phase 2 Checkpoint 4: Analyzer Result Mapping + UI States (frontend/src/pages/Analyzer.jsx, ScoreChart.jsx) ✅
-- Phase 2 Checkpoint 5: Resume History Integration (frontend/src/pages/Analyzer.jsx) ✅
-- Phase 2 Checkpoint 6: Remove Legacy Resume Mock/LocalStorage Logic (frontend/src/services/storage.js) ✅
-- Phase 2 Checkpoint 7: Full Phase 2 End-to-End Verification (backend/scripts/verify_phase2_checkpoint7.js) ✅
+- Phase 2: Resume Pipeline (Analyzer + History + File Parse) — All 7 Checkpoints Complete ✅
+- Phase 3 Checkpoint 1: Backend Contract Audit (Templates, Resume Builder, Cover Letter APIs) ✅
 
-### Phase 2 Checkpoint 7 Full End-to-End Verification Matrix
+### Phase 3 Checkpoint 1: Verified Backend API Contracts & Audit Findings
 
-| Test | Verification Method | Result | Evidence | Notes / Blocker |
-|---|---|---|---|---|
-| 1. PDF analysis | API integration test (`analyzeResumeApi` with binary PDF buffer via FormData) | **PASS** | Status 200, Score: 71, Matched: 10 keywords, Saved with `fileName: 'test_resume.pdf'` and `user: userA._id` | PDF parsed via `pdf-parse`; automatic fallback NLP kicked in when OpenAI 429 quota returned; saved to MongoDB |
-| 2. DOCX analysis | API integration test (`analyzeResumeApi` with valid `.docx` binary buffer via FormData) | **PASS** | Status 200, Score: 64, Matched: 9 keywords, Saved with `fileName: 'resume_doc.docx'` and `user: userA._id` | DOCX parsed via `mammoth`; fallback NLP processed content; saved to MongoDB |
-| 3. Plain-text analysis | API integration test (`analyzeResumeApi` with `{ resumeText, jobDescription }`) | **PASS** | Status 200, Score: 52, Saved with `fileName: 'pasted-text'` and `user: userA._id` | Backend accepted JSON/FormData text payload and persisted analysis |
-| 4. History persistence after refresh | API integration test (`getResumeHistoryApi`, `deleteResumeAnalysisApi`, re-fetch) | **PASS** | Initial count: 3, Newest-first: true, Excluded text fields: true, Deletion succeeded, Refreshed count: 2 | History correctly loads from MongoDB; excludes heavy text fields; newest first |
-| 5. User A/User B isolation | API integration test (2 users created; cross-account read & delete attempts) | **PASS** | User B count: 1; User A count: 2; Cross-user GET /:id returns 404; Cross-user DELETE returns 404 | Strict backend server-side isolation enforced by `{ user: req.user._id }` query filter |
-| 6. Unsupported file | API error handling test (`notes.txt` sent as resume) | **PASS** | Rejection status 500, message: "Only PDF and DOCX files are allowed" | Rejected by Multer upload middleware `fileFilter` |
-| 7. Oversized file | API error handling test (6MB buffer sent to resume field) | **PASS** | Rejection status 500, message: "File too large" | Rejected by Multer upload `limits: { fileSize: 5MB }` |
-| 8. Empty resume | API error handling test (`resumeText` < 20 chars) | **PASS** | Rejection status 400, message: "Resume text is too short or empty. Upload a file or paste resume text." | Rejected by backend controller validation |
-| 9. Missing Job Description | API error handling test (empty `jobDescription`) | **PASS** | Rejection status 400, message: "Job description is required" | Rejected by backend controller validation |
-| 10. Backend unavailable | Frontend API client test (attempt fetch to inactive port 59999) | **PASS** | Throws network error without crashing; `apiClient` adds descriptive message | Friendly network error caught and surfaced; no unhandled promise rejections |
-| 11. Malformed API response | Frontend unit/mapping test (`normalizeAnalysisResult` with null, NaN, out of bounds) | **PASS** | Invalid data rejected with clean error; score clamped [0, 100]; arrays defaulted to empty | Defensive mapping prevents NaN in charts and React rendering crashes |
-| 12. Unauthenticated history request | API auth test (`GET /api/v1/resume/history` without token) | **PASS** | Rejection status 401 Unauthorized, message: "Not authorized, no token" | Protected by `protect` JWT middleware |
-| 13. Loading/success/error/empty states | Static & state test (`isResultEmpty`, `ScoreChart` value clamping, IDLE/LOADING/ERROR) | **PASS** | Tested across varied inputs (-10, 150, 85.4, NaN, "72") → all properly clamped to [0, 100] | UI safely renders all state transitions |
-| 14. Legacy logic search | Static codebase inspection (`storage.js`, `Analyzer.jsx`) | **PASS** | Zero occurrences of `storage.analyzeResume()`, `file.text()`, or client NLP in active pipeline | Future-phase helpers (`saveCoverLetter`, `saveFeedback`, `saveBuiltResume`) preserved |
-| 15. Lint/build/automated tests | Build test (`npm run build` in `frontend/`) + test suite | **PASS** | Vite production build compiled in 26.21s with exit code 0; Test suite 14/14 tests passed | All 818 modules transformed without errors |
-| 16. AI/fallback path | Backend runtime log inspection during live API execution | **PASS** | OpenAI 429 quota caught; automatic fallback NLP executed; valid score/keywords returned | Fallback logic is reliable, deterministic, and fully matches response contract |
+#### 1. CV Templates API Contract
+- **Base Endpoint:** `/api/v1/templates` (Mounted in `backend/src/app.js` at line 62).
+- **Controller & Model:** `template.controller.js`, `Template.js` (Mongoose).
+- **Endpoints:**
+  - `GET /api/v1/templates`: Public. Supports optional query `?category=tech` (`business`, `creative`, `fresher`, `all`). Returns `{ success: true, message: 'Success', data: { templates: [...] } }`. Sorted by `name: 1`. Filters by `{ isActive: true }`.
+  - `GET /api/v1/templates/:slug`: Public. Finds template by `{ slug: req.params.slug, isActive: true }`. Returns `{ success: true, message: 'Success', data: { template: {...} } }`. Returns HTTP 404 `{ success: false, message: 'Template not found' }` if missing.
+  - Create/Update/Delete: None exposed in routes (managed via seed script or database admin).
+- **Template Object Schema:**
+  ```json
+  {
+    "_id": "6ad5cda7e94cba6b0bd0208d",
+    "name": "Modern Professional",
+    "slug": "modern-professional",
+    "description": "Clean, modern layout with blue accents. Perfect for tech and corporate roles.",
+    "category": "tech",
+    "previewConfig": {
+      "accentColor": "#2563EB",
+      "layout": "modern",
+      "fontFamily": "Plus Jakarta Sans"
+    },
+    "isActive": true,
+    "createdAt": "2026-10-19T...",
+    "updatedAt": "2026-10-19T..."
+  }
+  ```
+- **Seed Script Audit:** `backend/scripts/seed.js` defines 8 template documents matching the 8 frontend cards in `Templates.jsx`. Seeding runs `Template.deleteMany({})` then `Template.insertMany(templates)`.
+- **Frontend Disconnect:** `Templates.jsx` currently hardcodes the 8 templates in local React state (`const templates = [...]`) without fetching from `GET /api/v1/templates`.
+
+#### 2. ATS Resume Builder API Contract
+- **Base Endpoint:** `/api/v1/builder` (Mounted in `backend/src/app.js` at line 60).
+- **Controller & Model:** `resumeBuilder.controller.js`, `ResumeBuilder.js` (Mongoose).
+- **Validation:** Joi `resumeBuilderSchema` enforced via `validate.js` on POST and PUT.
+- **Endpoints:**
+  - `POST /api/v1/builder`: `optionalAuth`. Allows anonymous create (`user: null`) or authenticated create (`user: req.user._id`). Validates payload. Returns HTTP 201 `{ success: true, message: 'Resume saved successfully', data: { resume: {...} } }`.
+  - `GET /api/v1/builder`: `protect` required. Returns HTTP 200 `{ success: true, message: 'Success', data: { resumes: [...] } }` strictly scoped to `{ user: req.user._id }`, sorted by `updatedAt: -1`.
+  - `GET /api/v1/builder/:id`: `protect` required. Returns HTTP 200 `{ success: true, message: 'Success', data: { resume: {...} } }` scoped to `{ _id: req.params.id, user: req.user._id }`. Returns HTTP 404 if not found or owned by another user.
+  - `PUT /api/v1/builder/:id`: `protect` required. Finds and updates `{ _id: req.params.id, user: req.user._id }` with `new: true, runValidators: true`. Returns HTTP 200 `{ success: true, message: 'Resume updated successfully', data: { resume: {...} } }`. Returns HTTP 404 if not found or unauthorized.
+  - `DELETE /api/v1/builder/:id`: `protect` required. Finds and deletes `{ _id: req.params.id, user: req.user._id }`. Returns HTTP 200 `{ success: true, message: 'Resume deleted successfully', data: null }`. Returns HTTP 404 if not found or unauthorized.
+- **Resume Object Schema:**
+  - `title`: String (default: 'Untitled Resume')
+  - `personalInfo`: `{ fullName, email, phone, location, linkedin, website }` (Note: frontend form has `photo` which is not stored in MongoDB model; passport photo is handled client-side or omitted)
+  - `summary`: String
+  - `education`: Array of `{ institution, degree, field, startDate, endDate, gpa }`
+  - `experience`: Array of `{ company, position, location, startDate, endDate, current, description }`
+  - `skills`: Array of strings
+  - `projects`: Array of `{ name, description, technologies, link }`
+  - `certifications`: Array of `{ name, issuer, date, link }`
+  - `template`: String (default: 'modern', stores template slug/name)
+- **Security & IDOR Status:** Confirmed **SECURE**. All user operations strictly enforce `{ user: req.user._id }` at the database query level. Verified at runtime that User B receives 404 when attempting read, update, or deletion of User A's resumes.
+- **Frontend Disconnect:** `Builder.jsx` currently retains all resume data in ephemeral component state. Refresh loses data unless exported to PDF. Unused `saveBuiltResume` exists in `storage.js` saving to localStorage only.
+
+#### 3. AI Cover Letter API Contract
+- **Base Endpoint:** `/api/v1/cover-letter` (Mounted in `backend/src/app.js` at line 61).
+- **Controller, Service & Model:** `coverLetter.controller.js`, `CoverLetter.js` (Mongoose), `ai.service.js` (`generateCoverLetter`).
+- **Validation:** Joi `coverLetterSchema` on POST `/generate`.
+  - Required fields: `name`, `jobTitle`, `company`.
+  - Optional fields: `hiringManager` (default: 'Hiring Manager'), `keySkills` (string), `achievement` (string), `tone` (enum: 'professional', 'enthusiastic', 'concise', default: 'professional').
+- **Endpoints:**
+  - `POST /api/v1/cover-letter/generate`: `optionalAuth`. Calls `generateCoverLetter()`. Automatically creates and saves a document in MongoDB `CoverLetter` with `{ ...req.body, generatedLetter, user: req.user ? req.user._id : null }`. Returns HTTP 201 `{ success: true, message: 'Cover letter generated successfully', data: { coverLetter: {...} } }`.
+  - `GET /api/v1/cover-letter`: `protect` required. Returns HTTP 200 `{ success: true, message: 'Success', data: { coverLetters: [...] } }` scoped to `{ user: req.user._id }`, sorted by `createdAt: -1`.
+  - `PUT /api/v1/cover-letter/:id`: `protect` required. Updates `{ _id: req.params.id, user: req.user._id }`. Returns HTTP 200 `{ success: true, message: 'Updated successfully', data: { coverLetter: {...} } }`. Returns HTTP 404 if unauthorized or not found.
+  - `DELETE /api/v1/cover-letter/:id`: `protect` required. Deletes `{ _id: req.params.id, user: req.user._id }`. Returns HTTP 200 `{ success: true, message: 'Deleted successfully', data: null }`. Returns HTTP 404 if unauthorized or not found.
+  - *Route Note:* `GET /cover-letter/:id` is NOT mounted in routes. Single retrieval is not currently needed as `GET /cover-letter` provides full list with `generatedLetter`.
+- **AI & Fallback Behavior:** When OpenAI returns 429 quota exhaustion or key is absent, `ai.service.js` catches error and invokes `fallbackCoverLetter({ name, jobTitle, company, hiringManager, keySkills, achievement, tone })` which returns an interpolated tone-specific letter. Verified 100% operational.
+- **Frontend Disconnect:** `CoverLetter.jsx` generates letter client-side using hardcoded string templates and does not call `/cover-letter/generate`. Unused `saveCoverLetter` exists in `storage.js` saving to localStorage.
+
+---
+
+### Endpoint Summary Table
+
+| Feature | Method | Full Endpoint | Auth Required | Request Body / Params | Success Status | Success Envelope Key | Verified Result |
+|---|---|---|---|---|---|---|---|
+| Templates | GET | `/api/v1/templates` | Public | Query: `?category=` | 200 OK | `templates` (Array) | **VERIFIED** |
+| Templates | GET | `/api/v1/templates/:slug` | Public | Param: `:slug` | 200 OK | `template` (Object) | **VERIFIED** |
+| Resume Builder | POST | `/api/v1/builder` | Optional (`optionalAuth`) | JSON (Resume object) | 201 Created | `resume` (Object) | **VERIFIED** |
+| Resume Builder | GET | `/api/v1/builder` | Required (`protect`) | None | 200 OK | `resumes` (Array) | **VERIFIED** |
+| Resume Builder | GET | `/api/v1/builder/:id` | Required (`protect`) | Param: `:id` | 200 OK | `resume` (Object) | **VERIFIED** |
+| Resume Builder | PUT | `/api/v1/builder/:id` | Required (`protect`) | Param: `:id`, JSON body | 200 OK | `resume` (Object) | **VERIFIED** |
+| Resume Builder | DELETE | `/api/v1/builder/:id` | Required (`protect`) | Param: `:id` | 200 OK | `null` | **VERIFIED** |
+| Cover Letter | POST | `/api/v1/cover-letter/generate` | Optional (`optionalAuth`) | JSON (`name`, `jobTitle`, `company`, etc.) | 201 Created | `coverLetter` (Object) | **VERIFIED** |
+| Cover Letter | GET | `/api/v1/cover-letter` | Required (`protect`) | None | 200 OK | `coverLetters` (Array) | **VERIFIED** |
+| Cover Letter | PUT | `/api/v1/cover-letter/:id` | Required (`protect`) | Param: `:id`, JSON body | 200 OK | `coverLetter` (Object) | **VERIFIED** |
+| Cover Letter | DELETE | `/api/v1/cover-letter/:id` | Required (`protect`) | Param: `:id` | 200 OK | `null` | **VERIFIED** |
+
+---
+
+### Frontend Compatibility Matrix
+
+| Feature | Current Frontend Behavior | Backend Capability | Missing Integration or Mismatch |
+|---|---|---|---|
+| CV Templates | Hardcoded `templates` array in `Templates.jsx` | Full database catalog via `GET /templates` & `GET /templates/:slug` | Missing `templatesApi` service; `Templates.jsx` needs `useEffect` API fetch with loading & fallback |
+| Resume Builder | Ephemeral React state in `Builder.jsx`; PDF export only; unused `storage.saveBuiltResume` | Full authenticated CRUD with MongoDB persistence (`/builder`) | Missing `builderApi` service; `Builder.jsx` needs "Save Resume" action, draft persistence, and user resume loader |
+| Cover Letter | Instant client-side string interpolation; client-side PDF export; unused `storage.saveCoverLetter` | AI generation via OpenAI / fallback with automatic MongoDB persistence (`/cover-letter/generate`) | Missing `coverLetterApi` service; `CoverLetter.jsx` needs "Generate with AI" button, loading state, and saved letters list |
+
+---
+
+### Security Findings
+1. **Server-Side Ownership Enforcement:** Verified PASS. In both `ResumeBuilder` and `CoverLetter` controllers, all queries (`GET /:id`, `PUT /:id`, `DELETE /:id`) include `{ user: req.user._id }`.
+2. **IDOR Resistance:** Verified PASS. Cross-user read, update, and deletion attempts by unauthorized users consistently return HTTP 404 without leaking document existence or content.
+3. **Anonymous Creation Consideration:** Both `POST /builder` and `POST /cover-letter/generate` accept unauthenticated submissions via `optionalAuth`, saving with `user: null`. Anonymous records are not accessible via authenticated `GET` lists (which query `{ user: req.user._id }`), preventing anonymous data leakage.
+4. **Validation:** Joi schemas validate all input fields, preventing injection and malformed schema insertion.
+
+---
+
+### Runtime Test Results (`backend/scripts/verify_phase3_checkpoint1.js`)
+
+- `GET /templates` (List all): **PASS** (Status: 200)
+- `GET /templates?category=tech` (Filter): **PASS** (Status: 200)
+- `GET /templates/:slug` (Valid slug): **PASS** (Status: 200)
+- `GET /templates/non-existent-slug` (404 expected): **PASS** (Status: 404)
+- `GET /builder` (Unauthenticated -> 401): **PASS** (Status: 401)
+- `POST /builder` (Anonymous create -> user: null): **PASS** (Status: 201)
+- `POST /builder` (Authenticated create -> user: userA._id): **PASS** (Status: 201)
+- `GET /builder` (List User A resumes): **PASS** (Status: 200)
+- `GET /builder/:id` (Get by ID User A): **PASS** (Status: 200)
+- `PUT /builder/:id` (Update User A resume): **PASS** (Status: 200)
+- `GET /builder/:id` (User B cross-read blocked): **PASS** (Status: 404)
+- `PUT /builder/:id` (User B cross-update blocked): **PASS** (Status: 404)
+- `DELETE /builder/:id` (User B cross-delete blocked): **PASS** (Status: 404)
+- `DELETE /builder/:id` (Delete User A resume): **PASS** (Status: 200)
+- `POST /cover-letter/generate` (Missing required fields -> 400): **PASS** (Status: 400)
+- `POST /cover-letter/generate` (Authenticated generation & auto-persist): **PASS** (Status: 201)
+- `POST /cover-letter/generate` (Anonymous generation -> user: null): **PASS** (Status: 201)
+- `GET /cover-letter` (List User A letters): **PASS** (Status: 200)
+- `GET /cover-letter` (Unauthenticated -> 401): **PASS** (Status: 401)
+- `PUT /cover-letter/:id` (Update User A letter): **PASS** (Status: 200)
+- `PUT /cover-letter/:id` (User B cross-update blocked): **PASS** (Status: 404)
+- `DELETE /cover-letter/:id` (User B cross-delete blocked): **PASS** (Status: 404)
+- `DELETE /cover-letter/:id` (Delete User A letter): **PASS** (Status: 200)
+
+**Total: 23 tests | Passed: 23 | Failed: 0**
+
+---
+
+### Recommended Checkpoint Dependencies for Phase 3
+1. **Checkpoint 2:** Create Dedicated Frontend API Layer (`frontend/src/api/templates.js`, `builder.js`, `coverLetter.js`).
+2. **Checkpoint 3:** Wire CV Templates Page (`Templates.jsx`) to Real Templates API with category filters and loading/error states.
+3. **Checkpoint 4:** Wire Resume Builder (`Builder.jsx`) to Real Builder API (Save, Load, Draft Persistence, Template association).
+4. **Checkpoint 5:** Wire Cover Letter Generator (`CoverLetter.jsx`) to Real AI Generation API with History and Tone selection.
+5. **Checkpoint 6:** Clean Up Obsolete Builder/Cover Letter LocalStorage logic from `storage.js`.
+6. **Checkpoint 7:** Phase 3 Full End-to-End Verification & Audit Update.
 
 Next Task:
-Phase 3 — ATS Resume Builder + Templates + Cover Letter
+Phase 3 - Checkpoint 2: Phase 3 API Service Layer (frontend/src/api/templates.js, builder.js, coverLetter.js)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 2 - Checkpoint 7: Verify Resume pipeline end to end")
+Pending user commit approval (Suggested: "Phase 3 - Checkpoint 1: Audit and verify Templates, Builder, and Cover Letter APIs")
 
 Current Branch:
 main
