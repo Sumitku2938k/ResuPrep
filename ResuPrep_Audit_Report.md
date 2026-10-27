@@ -587,7 +587,7 @@ Current Phase:
 Phase 3 — Builder + Templates + Cover Letter (In Progress)
 
 Current Checkpoint:
-Phase 3 Checkpoint 1 — Backend Contract Audit (Completed ✅)
+Phase 3 Checkpoint 2 — Templates API Service (Completed ✅)
 
 Completed:
 - Repository Audit ✅
@@ -596,6 +596,7 @@ Completed:
 - Phase 1: Foundation (API Client + Real Authentication) — All 7 Checkpoints Complete ✅
 - Phase 2: Resume Pipeline (Analyzer + History + File Parse) — All 7 Checkpoints Complete ✅
 - Phase 3 Checkpoint 1: Backend Contract Audit (Templates, Resume Builder, Cover Letter APIs) ✅
+- Phase 3 Checkpoint 2: Templates API Service (frontend/src/api/templates.js) ✅
 
 ### Phase 3 Checkpoint 1: Verified Backend API Contracts & Audit Findings
 
@@ -741,11 +742,40 @@ Completed:
 5. **Checkpoint 6:** Clean Up Obsolete Builder/Cover Letter LocalStorage logic from `storage.js`.
 6. **Checkpoint 7:** Phase 3 Full End-to-End Verification & Audit Update.
 
+---
+
+### Phase 3 Checkpoint 2: Templates API Service Implementation & Verification
+
+#### 1. Implementation Summary
+- **Module Created:** [`frontend/src/api/templates.js`](frontend/src/api/templates.js)
+- **Functions Implemented:**
+  - `getTemplatesApi(params = {})`: Queries `GET /api/v1/templates`. Supports optional category filtering via `{ category }` object or direct string. Serializes query parameter `?category=${encodeURIComponent(category)}` when category is non-empty and !== `'all'`.
+  - `getTemplateBySlugApi(slug)`: Queries `GET /api/v1/templates/:slug`. Validates input to ensure `slug` is a non-empty string before dispatching network request. Encodes URI components and preserves backend HTTP 404 status.
+- **Architectural Guardrails Maintained:**
+  - Reuses the shared API client ([`frontend/src/api/client.js`](frontend/src/api/client.js)); no duplicate network or fetch transport introduced.
+  - No mock fallbacks or localStorage substitutions; network and server errors are faithfully surfaced.
+  - Leaves `Templates.jsx` untouched (reserved for Checkpoint 3).
+  - Leaves Builder and Cover Letter modules untouched (reserved for subsequent checkpoints).
+
+#### 2. Verification & Test Results
+- **Automated Test Suite:** [`backend/scripts/verify_templates_api_checkpoint2.js`](backend/scripts/verify_templates_api_checkpoint2.js)
+  - `TEST 1 - Module Exports Verification`: **PASS** (`getTemplatesApi` & `getTemplateBySlugApi` exported as functions)
+  - `TEST 2 - Fetch Template Catalogue`: **PASS** (Status 200 OK, returns array of active templates)
+  - `TEST 3 - Category Filtering via Object Param`: **PASS** (`{ category: 'tech' }` correctly serialized and filtered)
+  - `TEST 4 - Category Filtering via String Param`: **PASS** (`'business'` correctly serialized and filtered)
+  - `TEST 5 - Category "all" Fallback Handling`: **PASS** (No query filter appended; returns all active templates)
+  - `TEST 6 - Fetch Template by Valid Slug`: **PASS** (Retrieves single template object with `previewConfig`)
+  - `TEST 7 - Invalid Slug Validation Guard`: **PASS** (Empty/null slug rejected before network dispatch)
+  - `TEST 8 - Nonexistent Slug Returns 404`: **PASS** (HTTP 404 and `'Template not found'` error preserved)
+  - `TEST 9 - Empty Catalogue Safe Handling`: **PASS** (Returns `{ success: true, data: { templates: [] } }` without breaking)
+  - `TEST 10 - Full 8 Templates Catalogue Verified`: **PASS** (Full catalogue seeded and verified with count: 8)
+- **Frontend Production Build:** **PASS** (`npm run build` executed cleanly in 22.43s, exit code 0; 818 modules transformed).
+
 Next Task:
-Phase 3 - Checkpoint 2: Phase 3 API Service Layer (frontend/src/api/templates.js, builder.js, coverLetter.js)
+Phase 3 - Checkpoint 3: Connect Templates UI to the API (frontend/src/pages/Templates.jsx)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 3 - Checkpoint 1: Audit and verify Templates, Builder, and Cover Letter APIs")
+Pending user commit approval (Suggested: "Phase 3 - Checkpoint 2: Add Templates API service")
 
 Current Branch:
 main
