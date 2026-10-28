@@ -12,6 +12,7 @@ const emptyResume = {
   skills: [''],
   projects: [{ name: '', description: '', technologies: '', link: '' }],
   certifications: [{ name: '', issuer: '', date: '', link: '' }],
+  template: 'modern',
 };
 
 export default function Builder() {
@@ -28,6 +29,9 @@ export default function Builder() {
   useEffect(() => {
     if (location.state?.template?.previewConfig) {
       setTemplateConfig(location.state.template.previewConfig);
+    }
+    if (location.state?.template?.slug) {
+      setResume((prev) => ({ ...prev, template: location.state.template.slug }));
     }
   }, [location]);
 
