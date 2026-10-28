@@ -101,7 +101,7 @@ flowchart TB
 | Job Matcher | Yes | Hardcoded `mockJobs` + random match % | None | None | None | None | **MOCKED** |
 | ATS Resume Builder | Yes | Live form + html2pdf; no save API | Missing FE | Builder CRUD | `ResumeBuilder` | N/A | **PARTIAL** (PDF export works client-side; no BE persistence from UI) |
 | Cover Letter | Yes | Tone string templates | Missing FE | Generate + CRUD | `CoverLetter` | Real OpenAI **or** template fallback | **PARTIAL** |
-| CV Templates | Yes | Hardcoded 8 templates → Builder state | Missing FE | List/get by slug | `Template` + seed | N/A | **PARTIAL** (UI static; BE seeded but unused) |
+| CV Templates | Yes | Backend catalogue + category filter → Builder slug | templates.js | List/get by slug | `Template` + seed | N/A | **WORKING** (FE connected to BE /api/v1/templates) |
 | Skill Gap Analysis | Yes | Fully static charts/tables | Missing FE | Taxonomy + gap-analysis | None (hardcoded taxonomy) | Real OpenAI **or** fallback | **STATIC** (UI) / BE orphaned |
 | Skill Assessment | Yes | Hardcoded MCQ banks, client score | None | None | None | None | **STATIC** |
 | AI Mock Interview | Yes | Upload UI + `setTimeout` + random `mockResults` | None | None | None | None | **MOCKED** |
@@ -771,11 +771,48 @@ Completed:
   - `TEST 10 - Full 8 Templates Catalogue Verified`: **PASS** (Full catalogue seeded and verified with count: 8)
 - **Frontend Production Build:** **PASS** (`npm run build` executed cleanly in 22.43s, exit code 0; 818 modules transformed).
 
+---
+
+### Phase 3 Checkpoint 3: Connect Templates UI to the API Implementation & Verification
+
+#### 1. Implementation Summary
+- **Primary File Modified:** [`frontend/src/pages/Templates.jsx`](frontend/src/pages/Templates.jsx)
+  - **Replaced Static Array with Backend Catalogue:** Removed the hardcoded `const templates = [...]` array. Added dynamic React state (`templates`, `loading`, `error`, `activeTab`) and a lifecycle `useEffect` invoking `getTemplatesApi()`.
+  - **Response Unwrapping:** Robustly unwrapped response data (`res?.data?.templates || res?.templates || (Array.isArray(res?.data) ? res.data : []) || []`) without duplicate unwrapping or assumptions.
+  - **Category Filtering:** Filtered the live catalogue dynamically by category (`'all'`, `'tech'`, `'creative'`, `'business'`, `'academic'`, etc.) preserving instant, responsive filtering without redundant HTTP requests.
+  - **Preserved Design & Interactions:** Retained all header copy, gradient banners, category filter buttons, badges, hover effects, Framer Motion staggered animations, and `TemplateCard` rendering.
+  - **Reliable UI States:**
+    - **Loading State:** Centered glassmorphism loading card with an animated SVG spinner and informative copy ("Connecting to template repository...").
+    - **Error State:** Glassmorphic error alert card displaying a user-friendly error message, alert icon, and a prominent "Try Again" retry action that resets error state and re-invokes `getTemplatesApi()`.
+    - **Empty State:** Clean empty catalogue state with an option to reset category filters back to "All Templates".
+  - **Template Selection to Builder:** Updated `handleSelectTemplate(template)` to pass the actual backend template object `{ state: { template } }` containing the verified `slug` and `previewConfig` via `navigate('/builder', ...)`.
+- **Secondary File Modified:** [`frontend/src/pages/Builder.jsx`](frontend/src/pages/Builder.jsx)
+  - Preserved existing resume form and PDF preview logic.
+  - Updated `emptyResume` schema with default `template: 'modern'`.
+  - Updated `useEffect` navigation handler to safely initialize `resume.template = location.state.template.slug` in addition to applying `location.state.template.previewConfig`. Direct navigation without template selection safely falls back to standard modern defaults.
+
+#### 2. Verification & Test Results
+- **Automated Verification Script:** [`backend/scripts/verify_templates_ui_checkpoint3.js`](backend/scripts/verify_templates_ui_checkpoint3.js)
+  - `TEST 1 - Imports getTemplatesApi`: **PASS** (`Templates.jsx` imports `getTemplatesApi` from `../api/templates`)
+  - `TEST 2 - Hardcoded Template Array Removed`: **PASS** (Static array removed from primary source of truth)
+  - `TEST 3 - Lifecycle & UI States Declared`: **PASS** (`templates`, `loading`, `error`, `activeTab` states initialized)
+  - `TEST 4 - Loading Indicator State`: **PASS** (Loading spinner element rendered conditionally)
+  - `TEST 5 - Error & Retry Action`: **PASS** (Error state rendered with functional retry button)
+  - `TEST 6 - Empty State & Filter Reset`: **PASS** (Empty state rendered with category reset button)
+  - `TEST 7 - Navigation Passes Real Template State`: **PASS** (`handleSelectTemplate` navigates to `/builder` with `{ state: { template } }` passing `slug`)
+  - `TEST 8 - Builder Template State Initialization`: **PASS** (`Builder.jsx` safely parses `location.state.template.slug` and `previewConfig`)
+  - `TEST 9 - Backend Template Catalogue Response`: **PASS** (`GET /api/v1/templates` returns HTTP 200 with 8 seeded templates)
+  - `TEST 10 - Template Schema Compatibility with TemplateCard`: **PASS** (Backend seed properties `slug`, `previewConfig.layout`, `previewConfig.accentColor` match UI expectations)
+  - **Total: 10 tests | Passed: 10 | Failed: 0**
+- **Frontend Production Build:** **PASS** (`npm run build` compiled cleanly via Vite in 26.37s, 0 errors, 819 modules transformed).
+
+---
+
 Next Task:
-Phase 3 - Checkpoint 3: Connect Templates UI to the API (frontend/src/pages/Templates.jsx)
+Phase 3 - Checkpoint 4: Resume Builder API Service (frontend/src/api/builder.js)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 3 - Checkpoint 2: Add Templates API service")
+Pending user commit approval (Suggested: "Phase 3 - Checkpoint 3: Connect Templates UI to backend API")
 
 Current Branch:
 main
