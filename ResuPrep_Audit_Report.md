@@ -808,11 +808,51 @@ Completed:
 
 ---
 
+### Phase 3 Checkpoint 4: Resume Builder API Service Implementation & Verification
+
+#### 1. Implementation Summary
+- **Module Created:** [`frontend/src/api/builder.js`](frontend/src/api/builder.js)
+- **Functions Implemented:**
+  - `createResumeApi(resumeData)`: Sends `POST /api/v1/builder`. Supports unauthenticated submission (`optionalAuth`, stored with `user: null`) and authenticated submission (`user: req.user._id`). Returns `{ success: true, message: 'Resume saved successfully', data: { resume: {...} } }` with HTTP 201.
+  - `getResumesApi()`: Queries `GET /api/v1/builder`. Requires authentication (`protect`). Returns the authenticated user's resumes sorted by `updatedAt: -1`: `{ success: true, message: 'Success', data: { resumes: [...] } }` with HTTP 200.
+  - `getResumeByIdApi(id)`: Queries `GET /api/v1/builder/:id`. Validates that `id` is a non-empty string prior to network dispatch. Encodes parameter safely (`encodeURIComponent(safeId)`). Scoped to authenticated user (`{ _id, user: req.user._id }`). Returns `{ success: true, message: 'Success', data: { resume: {...} } }` with HTTP 200, or HTTP 404 for missing/unauthorized records.
+  - `updateResumeApi(id, resumeData)`: Sends `PUT /api/v1/builder/:id`. Validates `id` pre-network. Validates request body via backend Joi `resumeBuilderSchema`. Returns `{ success: true, message: 'Resume updated successfully', data: { resume: {...} } }` with HTTP 200.
+  - `deleteResumeApi(id)`: Sends `DELETE /api/v1/builder/:id`. Validates `id` pre-network. Scoped to authenticated user. Returns `{ success: true, message: 'Resume deleted successfully', data: null }` with HTTP 200.
+- **Architectural & Security Guardrails Maintained:**
+  - Built strictly on the shared central API client ([`frontend/src/api/client.js`](frontend/src/api/client.js)). Reuses cookie inclusion and `localStorage` Bearer JWT headers with zero duplicate fetch or Axios instances.
+  - IDOR and cross-user isolation: Backend ownership scoping (`{ user: req.user._id }`) returns HTTP 404 for cross-user read, update, or deletion attempts, which is faithfully surfaced by the service layer.
+  - Pre-network input validation guards: Rejects missing, non-string, or empty IDs immediately, avoiding wasteful network dispatches.
+  - Preservation of errors: HTTP 400 (Joi validation failure), HTTP 401 (Unauthorized), and HTTP 404 (Not Found) preserve backend status codes and error payloads on `error.status` and `error.data`.
+  - Schema mapping & frontend-only fields: Verified mapping for `title`, `personalInfo` (`fullName`, `email`, `phone`, `location`, `linkedin`, `website`), `summary`, `education`, `experience`, `skills`, `projects`, `certifications`, and `template`. Documented that `personalInfo.photo` is a frontend-only state field not supported by the backend Mongoose model or Joi schema (and stripped by Joi's `stripUnknown: true`).
+  - Template identifier: Transmits the verified template `slug` string (e.g. `'modern-professional'`, `'executive-classic'`, or default `'modern'`) conforming directly to the backend `ResumeBuilder` model and `Templates` API catalogue.
+
+#### 2. Verification & Test Results
+- **Automated Test Suite:** [`backend/scripts/verify_builder_api_service_checkpoint4.js`](backend/scripts/verify_builder_api_service_checkpoint4.js)
+  - `[TEST 1] Module Exports Verification`: **PASS** (`createResumeApi`, `getResumesApi`, `getResumeByIdApi`, `updateResumeApi`, `deleteResumeApi` exported as functions)
+  - `[TEST 2] Pre-network ID Validation Guard (getResumeByIdApi)`: **PASS** (Rejected 6/6 invalid/empty ID types before network dispatch)
+  - `[TEST 3] Pre-network ID Validation Guards (updateResumeApi & deleteResumeApi)`: **PASS** (Rejected 6/6 invalid ID invocations before network dispatch)
+  - `[TEST 4] Anonymous Resume Creation (optionalAuth, user: null)`: **PASS** (Status 201 Created, DB `user: null`, template slug preserved)
+  - `[TEST 5] Authenticated Resume Creation (Linked to User A)`: **PASS** (Status 201 Created, associated with User A, full nested schema persisted)
+  - `[TEST 6] List Authenticated User Resumes (getResumesApi)`: **PASS** (Status 200 OK, envelope `data.resumes` contains User A's resume)
+  - `[TEST 7] Get Single Resume by Valid ID (getResumeByIdApi)`: **PASS** (Status 200 OK, envelope `data.resume` retrieved with complete nested arrays)
+  - `[TEST 8] Update Resume by ID (updateResumeApi)`: **PASS** (Status 200 OK, updated title and skills returned and persisted)
+  - `[TEST 9] IDOR Isolation: Cross-User Read Blocked (HTTP 404)`: **PASS** (User B cannot read User A's resume, returns HTTP 404 Not Found)
+  - `[TEST 10] IDOR Isolation: Cross-User Update Blocked (HTTP 404)`: **PASS** (User B cannot modify User A's resume, returns HTTP 404 Not Found)
+  - `[TEST 11] IDOR Isolation: Cross-User Deletion Blocked (HTTP 404)`: **PASS** (User B cannot delete User A's resume, record remains safe in DB)
+  - `[TEST 12] Unauthenticated Route Protection (HTTP 401 Enforced)`: **PASS** (Protected endpoints GET, GET/:id, PUT/:id, DELETE/:id return HTTP 401 without auth)
+  - `[TEST 13] Validation Error Propagation (HTTP 400)`: **PASS** (Invalid schema payload returns HTTP 400 Bad Request with validation errors preserved)
+  - `[TEST 14] Delete Resume by ID (deleteResumeApi)`: **PASS** (Status 200 OK, deletion confirmed in MongoDB)
+  - `[TEST 15] Post-Deletion Single Fetch Returns 404`: **PASS** (Deleted record query correctly returns HTTP 404)
+  - **Total: 15 tests | Passed: 15 | Failed: 0**
+- **Frontend Production Build:** **PASS** (`npm --prefix frontend run build` compiled cleanly via Vite in 27.99s, 0 errors, 819 modules transformed).
+
+---
+
 Next Task:
-Phase 3 - Checkpoint 4: Resume Builder API Service (frontend/src/api/builder.js)
+Phase 3 — Checkpoint 5: Integrate Builder.jsx with the Resume Builder API
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 3 - Checkpoint 3: Connect Templates UI to backend API")
+Pending user commit approval (Suggested: "Phase 3 - Checkpoint 4: Add Resume Builder API service")
 
 Current Branch:
 main
