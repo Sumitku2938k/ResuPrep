@@ -848,11 +848,45 @@ Completed:
 
 ---
 
+### Phase 3 Checkpoint 5: Builder Save, Load and Update Integration
+
+#### 1. Implementation Summary
+- **Primary File Modified:** [`frontend/src/pages/Builder.jsx`](frontend/src/pages/Builder.jsx)
+  - **API Service Integration:** Imported `createResumeApi`, `getResumesApi`, `getResumeByIdApi`, `updateResumeApi`, `deleteResumeApi` from `../api/builder` and `getTemplateBySlugApi` from `../api/templates`. Direct `fetch()` and `axios` calls remain strictly absent.
+  - **Draft Identity & Duplicate Prevention:** Managed through `activeResumeId` state. Initialized to `null` for new resumes. When saving a new resume, `createResumeApi(payload)` is called and sets `activeResumeId` to the returned backend `_id`. Subsequent saves call `updateResumeApi(activeResumeId, payload)`, preventing duplicate record creation.
+  - **New Resume Reset:** Added a `handleNewResume` action that resets `resume` to `emptyResume`, sets `activeResumeId = null`, and resets `isDirty = false` with user confirmation if unsaved changes exist.
+  - **Saved Drafts List & Drawer:** On mount, `fetchSavedResumes` queries `getResumesApi()` and displays the authenticated user's saved drafts with title, template badge, last-updated timestamp, active indicator, Open/Edit action, and Delete action.
+  - **Draft Loading & Template Restoration:** `loadDraftById` fetches the complete resume record via `getResumeByIdApi(id)`, normalizes all nested arrays (education, experience, skills, projects, certifications), and queries `getTemplateBySlugApi(slug)` to restore live preview styling (`accentColor`, `layout`, `fontFamily`).
+  - **Draft Deletion in UI:** `handleDeleteDraft` prompts for confirmation, invokes `deleteResumeApi(id)`, removes the card from the list, and clears `activeResumeId` if the active draft was deleted.
+  - **Form Sanitization:** `sanitizeResumePayload` strips `personalInfo.photo` before dispatching to the backend, adhering to the backend schema while preserving the photo in local React state for canvas preview and PDF export.
+  - **Live Preview & PDF Export Preservation:** Retained all layout variants (sidebar, classic, creative, modern, minimal) and dynamic `html2pdf.js` client-side PDF downloads.
+  - **Dirty State & Unsaved Changes Guard:** `isDirty` tracks edits, renders an unsaved status badge, warns before tab closure via `beforeunload`, and prompts before opening a different draft or starting a new resume.
+
+#### 2. Verification & Test Results
+- **Automated Test Suite:** [`backend/scripts/verify_builder_ui_integration_checkpoint5.js`](backend/scripts/verify_builder_ui_integration_checkpoint5.js)
+  - `[TEST 1] Imports All 5 Builder API Functions from ../api/builder`: **PASS** (createResumeApi, getResumesApi, getResumeByIdApi, updateResumeApi, deleteResumeApi verified)
+  - `[TEST 2] Imports getTemplateBySlugApi from ../api/templates`: **PASS** (Template previewConfig restored when loading saved drafts)
+  - `[TEST 3] No Direct fetch() or Axios in Builder.jsx`: **PASS** (Zero unapproved network calls; all traffic via client.js)
+  - `[TEST 4] Active Resume ID Tracking & Create vs Update Branching`: **PASS** (Distinguishes new vs existing drafts; updates without duplicate creation)
+  - `[TEST 5] Sanitizes Network Payload (Photo treated as frontend-only)`: **PASS** (Photo kept in React state for preview/PDF, excluded from network payload)
+  - `[TEST 6] Preserves Live Preview & Client-side html2pdf Export`: **PASS** (Sidebar and standard layouts intact with html2pdf download)
+  - `[TEST 7] Dirty State Tracking & beforeunload Browser Protection`: **PASS** (beforeunload listener registered on dirty edits)
+  - `[TEST 8] Create New Resume Draft via API (createResumeApi)`: **PASS** (Status 201 Created, ID assigned, title & template slug persisted)
+  - `[TEST 9] Update Existing Draft (updateResumeApi) - Zero Duplication`: **PASS** (Same ID updated in-place, User A resume count remains 1 in MongoDB)
+  - `[TEST 10] List Saved Drafts (getResumesApi)`: **PASS** (Status 200 OK, retrieved user drafts matching updated title)
+  - `[TEST 11] Reopen Draft by ID (getResumeByIdApi) - Complete Schema Restoration`: **PASS** (Restores personalInfo, education, experience, projects, certifications)
+  - `[TEST 12] IDOR & Cross-User Isolation (User B cannot GET or PUT User A draft)`: **PASS** (Cross-user read returns HTTP 404, cross-user update returns HTTP 404)
+  - `[TEST 13] Delete Saved Draft (deleteResumeApi)`: **PASS** (Status 200 OK, deletion confirmed in MongoDB)
+  - **Total: 13 tests | Passed: 13 | Failed: 0**
+- **Frontend Production Build:** **PASS** (`npm --prefix frontend run build` compiled cleanly via Vite in 13.65s, 0 errors, 820 modules transformed).
+
+---
+
 Next Task:
-Phase 3 — Checkpoint 5: Integrate Builder.jsx with the Resume Builder API
+Phase 3 — Checkpoint 6: Cover Letter API Integration
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 3 - Checkpoint 4: Add Resume Builder API service")
+Pending user commit approval (Suggested: "Phase 3 - Checkpoint 5: Integrate Builder save and load with backend")
 
 Current Branch:
 main
