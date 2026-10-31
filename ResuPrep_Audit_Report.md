@@ -100,7 +100,7 @@ flowchart TB
 | Resume Analyzer | Yes | Client keyword NLP + `Math.random` score | Missing FE client | `POST /resume/analyze` + history | `ResumeAnalysis` | Real OpenAI **or** fallback | **PARTIAL** (BE real, FE disconnected/mocked) |
 | Job Matcher | Yes | Hardcoded `mockJobs` + random match % | None | None | None | None | **MOCKED** |
 | ATS Resume Builder | Yes | Live form + html2pdf; no save API | Missing FE | Builder CRUD | `ResumeBuilder` | N/A | **PARTIAL** (PDF export works client-side; no BE persistence from UI) |
-| Cover Letter | Yes | Tone string templates | Missing FE | Generate + CRUD | `CoverLetter` | Real OpenAI **or** template fallback | **PARTIAL** |
+| Cover Letter | Yes | Tone string templates | coverLetter.js (UI pending) | Generate + CRUD | `CoverLetter` | Real OpenAI **or** template fallback | **PARTIAL** (API service complete, UI integration pending) |
 | CV Templates | Yes | Backend catalogue + category filter → Builder slug | templates.js | List/get by slug | `Template` + seed | N/A | **WORKING** (FE connected to BE /api/v1/templates) |
 | Skill Gap Analysis | Yes | Fully static charts/tables | Missing FE | Taxonomy + gap-analysis | None (hardcoded taxonomy) | Real OpenAI **or** fallback | **STATIC** (UI) / BE orphaned |
 | Skill Assessment | Yes | Hardcoded MCQ banks, client score | None | None | None | None | **STATIC** |
@@ -882,11 +882,51 @@ Completed:
 
 ---
 
+### Phase 3 — Checkpoint 6: Cover Letter API Service Implementation & Verification
+
+#### 1. Implementation Summary
+- **Module Created:** [`frontend/src/api/coverLetter.js`](frontend/src/api/coverLetter.js)
+- **Functions Implemented:**
+  - `generateCoverLetterApi(data)`: Sends `POST /api/v1/cover-letter/generate`. Pre-network validation ensures `name`, `jobTitle`, and `company` are non-empty strings, and validates `tone` against `['professional', 'enthusiastic', 'concise']`. Supports unauthenticated submissions (`optionalAuth`, stored in DB with `user: null`) and authenticated submissions (linked to `req.user._id`). Returns `{ success: true, message: 'Cover letter generated successfully', data: { coverLetter: {...} } }` with HTTP 201 Created.
+  - `getCoverLettersApi()`: Sends `GET /api/v1/cover-letter`. Requires user authentication (`protect`). Returns the authenticated user's saved cover letters sorted by `createdAt: -1`: `{ success: true, message: 'Success', data: { coverLetters: [...] } }` with HTTP 200 OK.
+  - `updateCoverLetterApi(id, data)`: Sends `PUT /api/v1/cover-letter/:id`. Validates `id` pre-network and safely encodes URI parameters (`encodeURIComponent(safeId)`). Scoped strictly to owner (`{ _id, user: req.user._id }`). Returns `{ success: true, message: 'Updated successfully', data: { coverLetter: {...} } }` with HTTP 200 OK, or HTTP 404 for missing/unauthorized records. Updates document metadata and text without re-invoking AI generation.
+  - `deleteCoverLetterApi(id)`: Sends `DELETE /api/v1/cover-letter/:id`. Validates `id` pre-network. Scoped to authenticated owner. Returns `{ success: true, message: 'Deleted successfully', data: null }` with HTTP 200 OK, or HTTP 404 for missing/unauthorized records.
+  - **Single-Record GET Endpoint Omission:** Confirmed that `GET /api/v1/cover-letter/:id` is not mounted on the backend. As per strict architectural rules, no single-record GET function is exposed in `coverLetter.js`.
+- **Generation & Automatic Persistence Architectural Rule:**
+  - In the backend controller (`coverLetter.controller.js`), `generate` calls `ai.service.generateCoverLetter()` and immediately persists the record via `CoverLetter.create({ ...req.body, generatedLetter, user: req.user ? req.user._id : null })`.
+  - A successful generation is therefore automatically a persistence operation. No secondary create/save endpoint is required or called.
+- **Architectural & Security Guardrails Maintained:**
+  - Built strictly on the shared central API client ([`frontend/src/api/client.js`](frontend/src/api/client.js)). Reuses cookie inclusion and `localStorage` Bearer JWT headers with zero duplicate fetch or Axios instances.
+  - No frontend OpenAI calls or secrets: `OPENAI_API_KEY` remains exclusively on the backend server. No `VITE_OPENAI_API_KEY` or direct OpenAI SDK usage exists in the frontend.
+  - IDOR and cross-user isolation: Server-side ownership scoping (`{ user: req.user._id }`) returns HTTP 404 for cross-user update or deletion attempts, which is faithfully surfaced by the service layer.
+  - Pre-network input validation guards: Rejects missing required generation fields (`name`, `jobTitle`, `company`), invalid tone enums, and non-string or empty IDs before network dispatch.
+  - Error normalization: Preserves backend HTTP statuses (400, 401, 404, 500) and payloads without returning fake mock data.
+
+#### 2. Verification & Test Results
+- **Automated Test Suite:** [`backend/scripts/verify_cover_letter_api_service_checkpoint6.js`](backend/scripts/verify_cover_letter_api_service_checkpoint6.js)
+  - `[TEST 1] Module Exports Verification`: **PASS** (`generateCoverLetterApi`, `getCoverLettersApi`, `updateCoverLetterApi`, `deleteCoverLetterApi` exported as functions; `getCoverLetterByIdApi` correctly undefined)
+  - `[TEST 2] Shared Client Reuse & Security Inspection`: **PASS** (Imports shared `client.js`, 0 direct axios/fetch calls, 0 OpenAI keys in frontend source)
+  - `[TEST 3] Pre-network Validation Guards (generateCoverLetterApi)`: **PASS** (Rejected 6/6 invalid payloads pre-network before dispatch)
+  - `[TEST 4] Pre-network ID Validation Guards (updateCoverLetterApi & deleteCoverLetterApi)`: **PASS** (Rejected 12/12 invalid ID invocations before dispatch)
+  - `[TEST 5] Anonymous Generation & Auto-Persistence (user: null)`: **PASS** (Status 201 Created, DB `user: null`, generated letter persisted)
+  - `[TEST 6] Authenticated Generation & Ownership Association (User A)`: **PASS** (Status 201 Created, associated with User A, letter text persisted)
+  - `[TEST 7] List Saved Letters (getCoverLettersApi)`: **PASS** (Status 200 OK, envelope `data.coverLetters` contains User A letter and excludes anonymous/other users)
+  - `[TEST 8] Update Cover Letter by ID (updateCoverLetterApi)`: **PASS** (Status 200 OK, updated text and tone persisted in MongoDB)
+  - `[TEST 9] IDOR Isolation: Cross-User Update Blocked (HTTP 404)`: **PASS** (User B cannot modify User A's letter, returns HTTP 404 Not Found)
+  - `[TEST 10] IDOR Isolation: Cross-User Deletion Blocked (HTTP 404)`: **PASS** (User B cannot delete User A's letter, returns HTTP 404 Not Found)
+  - `[TEST 11] Unauthenticated Route Protection (HTTP 401 Enforced)`: **PASS** (Protected endpoints GET, PUT/:id, DELETE/:id return HTTP 401 without auth)
+  - `[TEST 12] Delete Cover Letter by ID (deleteCoverLetterApi)`: **PASS** (Status 200 OK, deletion confirmed in MongoDB)
+  - `[TEST 13] Omission of Nonexistent getCoverLetterByIdApi`: **PASS** (Single-record GET endpoint confirmed unmounted and omitted)
+  - **Total: 13 tests | Passed: 13 | Failed: 0**
+- **Frontend Production Build:** **PASS** (`npm --prefix frontend run build` compiled cleanly via Vite in 10.21s, 0 errors, 820 modules transformed).
+
+---
+
 Next Task:
-Phase 3 — Checkpoint 6: Cover Letter API Integration
+Phase 3 — Checkpoint 7: Cover Letter UI Integration (frontend/src/pages/CoverLetter.jsx)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 3 - Checkpoint 5: Integrate Builder save and load with backend")
+Pending user commit approval (Suggested: "Phase 3 - Checkpoint 6: Add Cover Letter API service")
 
 Current Branch:
 main
