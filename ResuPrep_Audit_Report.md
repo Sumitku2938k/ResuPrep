@@ -100,7 +100,7 @@ flowchart TB
 | Resume Analyzer | Yes | Client keyword NLP + `Math.random` score | Missing FE client | `POST /resume/analyze` + history | `ResumeAnalysis` | Real OpenAI **or** fallback | **PARTIAL** (BE real, FE disconnected/mocked) |
 | Job Matcher | Yes | Hardcoded `mockJobs` + random match % | None | None | None | None | **MOCKED** |
 | ATS Resume Builder | Yes | Live form + html2pdf; no save API | Missing FE | Builder CRUD | `ResumeBuilder` | N/A | **PARTIAL** (PDF export works client-side; no BE persistence from UI) |
-| Cover Letter | Yes | Tone string templates | coverLetter.js (UI pending) | Generate + CRUD | `CoverLetter` | Real OpenAI **or** template fallback | **PARTIAL** (API service complete, UI integration pending) |
+| Cover Letter | Yes | AI generation + MongoDB saved letters + update/delete | coverLetter.js | Generate + CRUD | `CoverLetter` | Real OpenAI **or** template fallback | **WORKING** (FE connected to BE /api/v1/cover-letter) |
 | CV Templates | Yes | Backend catalogue + category filter → Builder slug | templates.js | List/get by slug | `Template` + seed | N/A | **WORKING** (FE connected to BE /api/v1/templates) |
 | Skill Gap Analysis | Yes | Fully static charts/tables | Missing FE | Taxonomy + gap-analysis | None (hardcoded taxonomy) | Real OpenAI **or** fallback | **STATIC** (UI) / BE orphaned |
 | Skill Assessment | Yes | Hardcoded MCQ banks, client score | None | None | None | None | **STATIC** |
@@ -922,11 +922,49 @@ Completed:
 
 ---
 
+### Phase 3 — Checkpoint 7: Cover Letter UI, AI Generation and Persistence Implementation & Verification
+
+#### 1. Implementation Summary
+- **Primary File Modified:** [`frontend/src/pages/CoverLetter.jsx`](frontend/src/pages/CoverLetter.jsx)
+  - **Replaced Keystroke Static String-Template Generation:** Retired synchronous client-side template concatenation (`openings[tone] + bodies[tone]`). Implemented dedicated `handleGenerateLetter` action dispatching to `generateCoverLetterApi(payload)`.
+  - **Active Document & Identity Tracking:** Added `activeLetterId` state to track the active MongoDB document ID returned by the backend generation endpoint.
+  - **Honest Loading & UI States:**
+    - **Generation Loading:** Disables "Generate Cover Letter with AI" button, prevents duplicate submissions, and displays an animated SVG spinner with informative status copy ("Generating Cover Letter...").
+    - **Cloud Status Indicators:** Displays "Saved to Cloud" (emerald badge) when linked to a persisted MongoDB ID, and "Unsaved Edits" (amber badge) when modifications are made.
+  - **Inline Editing & Update Support:** Added a "Preview View" / "Edit Text" toggle button and editable textarea in the letter paper container. Manual edits set `isDirty = true`. A dedicated "Save Changes" action calls `updateCoverLetterApi(activeLetterId, updatePayload)` to update the document in place without creating duplicate records or re-invoking AI generation.
+  - **Saved Cover Letters History:**
+    - **Authenticated Users (`user`):** Automatically queries `getCoverLettersApi()` on mount and refreshes following generation, updates, or deletions. Displays cards with company name, job title, tone badge, formatted creation date, "Open & Edit" action, and "Delete" action.
+    - **Unauthenticated View:** For guests, renders a friendly glassmorphic banner explaining that letter history requires login, with a direct link to `/login`. Anonymous generation remains supported via backend `optionalAuth` (saving with `user: null`).
+    - **Empty & Error States:** Includes dedicated empty state when history is empty, and error state with a "Try Again" retry action.
+  - **Open & Edit Action:** Populates form fields, restores letter body and tone, sets `activeLetterId`, resets `isDirty = false`, and scrolls smoothly to top with confirmation guard if unsaved changes exist.
+  - **Delete Action:** Prompts for user confirmation, invokes `deleteCoverLetterApi(id)`, removes card from UI state, and resets active editor if deleted letter was open.
+  - **Preserved PDF Export:** Client-side `html2pdf.js` export retained, downloading the currently rendered/edited letter directly from `previewRef.current` without triggering new API generations or database records.
+
+#### 2. Verification & Test Results
+- **Automated Verification Suite:** [`backend/scripts/verify_cover_letter_ui_checkpoint7.js`](backend/scripts/verify_cover_letter_ui_checkpoint7.js)
+  - `[TEST 1] Imports Cover Letter API Service Functions`: **PASS** (Imports generateCoverLetterApi, getCoverLettersApi, updateCoverLetterApi, deleteCoverLetterApi from ../api/coverLetter.js)
+  - `[TEST 2] Imports useAuth Hook`: **PASS** (Retrieves auth context user state via useAuth())
+  - `[TEST 3] No Direct Fetch or Axios in CoverLetter.jsx`: **PASS** (All backend network calls routed through client.js & coverLetter.js)
+  - `[TEST 4] Static String-Template Keystroke Generation Retired`: **PASS** (Primary generation path delegates to backend AI pipeline via handleGenerateLetter)
+  - `[TEST 5] Document Identity & UI States Declared`: **PASS** (Tracks activeLetterId, generating, saving, isDirty, savedLetters, historyLoading)
+  - `[TEST 6] Tone Enum Alignment`: **PASS** (Tones map 1:1 to backend Joi enum: professional, enthusiastic, concise)
+  - `[TEST 7] Preserves Client-Side PDF Export`: **PASS** (Downloads rendered/edited letter directly from previewRef without triggering new API generations)
+  - `[TEST 8] Authenticated Generation & MongoDB Persistence`: **PASS** (Status 201 Created, document persisted in MongoDB linked to User A, generatedLetter returned)
+  - `[TEST 9] History Retrieval (Populates Saved Letters)`: **PASS** (Status 200 OK, retrieved User A saved letters; includes newly generated letter)
+  - `[TEST 10] Update Saved Letter (Zero Duplicate Duplication)`: **PASS** (Status 200 OK, document updated in place; User A total letter count remains 1)
+  - `[TEST 11] IDOR Cross-User Isolation (HTTP 404 Enforced)`: **PASS** (User B cross-update and cross-delete blocked with HTTP 404; User A document untouched)
+  - `[TEST 12] Delete Cover Letter & MongoDB Purge`: **PASS** (Status 200 OK, document confirmed deleted from MongoDB)
+  - `[TEST 13] Anonymous Generation (user: null)`: **PASS** (Status 201 Created, document saved in MongoDB with user: null)
+  - **Total: 13 tests | Passed: 13 | Failed: 0**
+- **Frontend Production Build:** **PASS** (`npm --prefix frontend run build` compiled cleanly via Vite in 10.38s, 0 errors, 821 modules transformed).
+
+---
+
 Next Task:
-Phase 3 — Checkpoint 7: Cover Letter UI Integration (frontend/src/pages/CoverLetter.jsx)
+Phase 3 — Checkpoint 8: Clean Up Obsolete Builder/Cover Letter LocalStorage logic from storage.js
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 3 - Checkpoint 6: Add Cover Letter API service")
+Pending user commit approval (Suggested: "Phase 3 - Checkpoint 7: Integrate Cover Letter UI with backend AI and persistence")
 
 Current Branch:
 main
