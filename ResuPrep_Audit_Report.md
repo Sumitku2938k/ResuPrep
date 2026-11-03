@@ -1046,11 +1046,62 @@ Completed:
 
 All objectives for **Phase 3: Builder, Templates API, Cover Letter AI** are fully implemented, verified end-to-end, and cleaned of obsolete localStorage and hardcoded data.
 
+---
+
+### Phase 4 — Checkpoint 1: Backend Contract Audit (Skills Gap, FAQ, Feedback)
+
+#### 1. Audit Summary & Contract Verification
+- **Audit Verification Suite:** [`backend/scripts/verify_phase4_checkpoint1.js`](backend/scripts/verify_phase4_checkpoint1.js) (Executed against live Express test instance and MongoDB).
+- **Comprehensive Contract Document Created:** [`PHASE_4_API_CONTRACT.md`](PHASE_4_API_CONTRACT.md) at repository root.
+- **Audited Endpoints & Behavior:**
+  1. **Skills Taxonomy:** `GET /api/v1/skills/taxonomy/:role`
+     - Public access. Returns curated core skill taxonomy array with level and category.
+     - Known roles: `frontend-developer`, `backend-developer`, `data-scientist`, `full-stack-developer`, `devops-engineer`.
+     - Unsupported role parameter safely defaults to `full-stack-developer`.
+  2. **Skill Gap Analysis:** `POST /api/v1/skills/gap-analysis`
+     - Public access. Requires body `{ currentSkills: string[], targetRole: string }`.
+     - Validates payload presence; missing parameters trigger HTTP 400 Bad Request.
+     - Invokes `ai.service.analyzeSkillGap()` targeting `gpt-3.5-turbo` with prompt for JSON array of `{ skill, priority, resource }`.
+     - When OpenAI is unavailable, activates `fallbackSkillGap()` which returns the exact same `{ skill, priority, resource }` schema.
+  3. **FAQ Retrieval:** `GET /api/v1/faqs`
+     - Public access. Mounted at plural path `/api/v1/faqs` (singular `/faq` returns HTTP 404).
+     - Optional query filter `?category=` filters active FAQs.
+     - Sorts automatically by `{ category: 1, order: 1 }`.
+     - Supported category enums in `FAQ.js`: `getting-started`, `resume-analyzer`, `job-matching`, `cv-templates`, `skill-assessment`.
+  4. **Feedback Submission:** `POST /api/v1/feedback`
+     - Public access. Validated strictly by Joi `feedbackSchema`: `name` (2-50 chars), `role` (max 50, default 'User'), `rating` (integer 1-5), `feature` (enum: 'resume-analyzer', 'job-matcher', 'resume-builder', 'cover-letter', 'skill-assessment', 'general'), `message` (10-1000 chars).
+     - Persisted to MongoDB `Feedback` model with default `isPublic: true`.
+     - Anonymous by design: `Feedback` model has no `user` reference.
+  5. **Feedback Public Retrieval:** `GET /api/v1/feedback/public`
+     - Public access. Queries `Feedback.find({ isPublic: true }).sort({ createdAt: -1 }).limit(50)`.
+
+#### 2. Verification Results (`verify_phase4_checkpoint1.js`)
+- `[TEST 01] GET /skills/taxonomy/:role (Known role)`: **PASS** (Status 200, returns 8 skills for frontend-developer)
+- `[TEST 02] GET /skills/taxonomy/:role (Unknown role fallback)`: **PASS** (Status 200, defaults to full-stack-developer)
+- `[TEST 03] POST /skills/gap-analysis (Validation: Missing required fields)`: **PASS** (Status 400 Bad Request)
+- `[TEST 04] POST /skills/gap-analysis (Valid analysis response)`: **PASS** (Status 200 OK, returns 7 prioritized gap items)
+- `[TEST 05] GET /faqs (List all active FAQs)`: **PASS** (Status 200 OK, returns active FAQs)
+- `[TEST 06] GET /faqs?category=getting-started (Query Category Filter)`: **PASS** (Status 200 OK, filters by category)
+- `[TEST 07] POST /feedback (Validation: Joi rejects missing rating & message)`: **PASS** (Status 400 Bad Request)
+- `[TEST 08] POST /feedback (Validation: Joi rejects rating > 5 & invalid feature)`: **PASS** (Status 400 Bad Request)
+- `[TEST 09] POST /feedback (Valid submission, HTTP 201, auto isPublic: true)`: **PASS** (Status 201 Created, saved in DB)
+- `[TEST 10] GET /feedback/public (Retrieve public reviews list)`: **PASS** (Status 200 OK, returns public reviews)
+- `[TEST 11] Route Pluralization Integrity (/faqs mounted, /faq returns 404)`: **PASS** (Plural prefix confirmed)
+- `[TEST 12] Feedback Model User Association Contract`: **PASS** (Confirmed feedback decoupled from user accounts)
+- **Total: 12 tests | Passed: 12 | Failed: 0**
+
+#### 3. Known Issues & Backend Discrepancies
+- **FAQ Model Enum vs. Seed Data:** In `backend/scripts/seed.js`, items with `category: 'mock-interview'` are specified, but `FAQ.js` Mongoose schema enum currently only permits `['getting-started', 'resume-analyzer', 'job-matching', 'cv-templates', 'skill-assessment']`.
+- **Plural Route:** Frontend FAQ service must use `/faqs`, not `/faq`.
+- **Feedback Retrieval:** No private or user-specific feedback listing endpoint exists in the backend; all feedback retrieval uses `GET /api/v1/feedback/public`.
+
+---
+
 Next Task:
-Phase 4 — Checkpoint 1: Skills Gap, FAQ & Feedback Backend Contract Audit
+Phase 4 — Checkpoint 2: Skills API Service Layer (frontend/src/api/skills.js)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 3 - Checkpoint 8: Verify integrations and clean obsolete persistence")
+Pending user commit approval (Suggested: "Phase 4 - Checkpoint 1: Audit Skills FAQ Feedback APIs")
 
 Current Branch:
 main
