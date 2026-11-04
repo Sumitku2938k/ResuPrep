@@ -1097,11 +1097,43 @@ All objectives for **Phase 3: Builder, Templates API, Cover Letter AI** are full
 
 ---
 
+### Phase 4 — Checkpoint 2: Skills API Service Layer
+
+#### 1. Implementation Summary
+- **Created Service Module:** [`frontend/src/api/skills.js`](frontend/src/api/skills.js)
+- **Functions Implemented:**
+  1. `getSkillsTaxonomyApi(role)`: Validates role slug (non-empty string), issues `api.get('/skills/taxonomy/' + encodeURIComponent(role.trim()))`.
+  2. `getSkillTaxonomyApi(role)`: Exported exact alias of `getSkillsTaxonomyApi` to guarantee seamless interoperability across both naming conventions.
+  3. `analyzeSkillGapApi(data)`: Validates payload object, validates `currentSkills` as non-empty array of non-empty strings, validates `targetRole` as non-empty string. Issues `api.post('/skills/gap-analysis', payload)`.
+- **Architectural Safeguards & Shared Client Reuse:**
+  - Directly reuses `api` from [`frontend/src/api/client.js`](frontend/src/api/client.js).
+  - No direct `axios` or direct `fetch` invocations.
+  - No OpenAI API calls or exposed secret keys in frontend.
+  - No client-side fallback/mock skill generation; delegates entirely to backend AI/NLP service.
+  - Native error propagation preserves HTTP status codes (e.g. 400 Bad Request) and backend messages.
+
+#### 2. Verification Results (`backend/scripts/verify_skills_api_service_checkpoint2.js`)
+- `[TEST 01] Module Exports & Alias Verification`: **PASS** (Functions verified; `getSkillTaxonomyApi === getSkillsTaxonomyApi`)
+- `[TEST 02] Static Code Guardrails & Shared Client Reuse`: **PASS** (Reuses `client.js`, no axios/fetch, no OpenAI keys, no mock data)
+- `[TEST 03] Taxonomy Pre-Flight Validation`: **PASS** (Rejected 7/7 invalid/empty/non-string roles before network request)
+- `[TEST 04] Taxonomy Live Retrieval (frontend-developer)`: **PASS** (Status 200, Role: "Frontend Developer", 8 skills)
+- `[TEST 05] Taxonomy Alias & Unknown Role Default Fallback`: **PASS** (Status 200, safely defaulted to "Full Stack Developer")
+- `[TEST 06] Skill Gap Pre-Flight Payload Validation`: **PASS** (Rejected 13/13 malformed payloads before network request)
+- `[TEST 07] Skill Gap Live Analysis (OpenAI / NLP Backend)`: **PASS** (Status 200, Target role: "Frontend Developer", 7 prioritized gaps)
+- `[TEST 08] Backend HTTP 400 Error Preservation & Propagation`: **PASS** (Status 400 preserved with exact backend error message)
+- **Total: 8 tests | Passed: 8 | Failed: 0**
+
+#### 3. Regression & Build Verification
+- **Regression Suite:** `backend/scripts/verify_phase4_checkpoint1.js` (12/12 PASS).
+- **Frontend Production Build:** `npm --prefix frontend run build` completed successfully in 14.37s with zero errors.
+
+---
+
 Next Task:
-Phase 4 — Checkpoint 2: Skills API Service Layer (frontend/src/api/skills.js)
+Phase 4 — Checkpoint 3: Connect Skills UI to Skills API (frontend/src/pages/Skills.jsx)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 4 - Checkpoint 1: Audit Skills FAQ Feedback APIs")
+Pending user commit approval (Suggested: "Phase 4 - Checkpoint 2: Skills API Service Layer")
 
 Current Branch:
 main
