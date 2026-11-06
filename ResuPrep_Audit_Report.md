@@ -1174,11 +1174,51 @@ All objectives for **Phase 3: Builder, Templates API, Cover Letter AI** are full
 
 ---
 
+### Phase 4 — Checkpoint 4: FAQ API Service Implementation & Verification
+
+#### 1. Implementation Summary
+- **Created Service Module:** [`frontend/src/api/faq.js`](frontend/src/api/faq.js)
+- **Function Exported:**
+  - `getFAQsApi(params = {})`: Accepts optional string or object `{ category }`.
+- **Endpoint & Query Behavior:**
+  - Base endpoint: `/faqs` (plural route mounted in Express backend).
+  - Query parameter serialization: If `category` is supplied and `!== 'all'`, serializes to `/faqs?category=${encodeURIComponent(category.trim())}`.
+  - Omitted, empty, whitespace, or `'all'` inputs safely omit the query string and query all active FAQs.
+- **Architectural Safeguards & Shared Client Reuse:**
+  - Directly reuses `api.get` from [`frontend/src/api/client.js`](frontend/src/api/client.js).
+  - No direct `axios` or direct `fetch()` calls.
+  - Zero hardcoded fallback/mock FAQ data.
+  - Zero OpenAI API keys or client-side AI dependencies.
+  - Preserves backend HTTP errors and statuses (e.g. 404, 500) without swallowing or converting them into mock responses.
+- **Contract Discrepancy Note:**
+  - Confirmed: Seed script `seed.js` includes `category: 'mock-interview'`, but `'mock-interview'` is not in the Mongoose `FAQ.js` enum. The frontend service remains decoupled from schema enums and safely serializes any category parameter requested.
+
+#### 2. Verification Results (`backend/scripts/verify_faq_api_service_checkpoint4.js`)
+- `[TEST 01] Module Export Verification`: **PASS** (`getFAQsApi` exported as function)
+- `[TEST 02] Static Code Guardrails & Shared Client Reuse`: **PASS** (Reuses `client.js`, no axios/fetch, no OpenAI keys, no mock FAQs)
+- `[TEST 03] Default Invocation (No Query String)`: **PASS** (Requests `/faqs`, returns status 200 with active FAQs array)
+- `[TEST 04] Category Filtering via String Parameter ("getting-started")`: **PASS** (Queries `/faqs?category=getting-started`, all match category)
+- `[TEST 05] Category Filtering via Object Parameter ({ category: "getting-started" })`: **PASS** (Status 200, category filter applied)
+- `[TEST 06] "all" Category Handling (Safely Omitted From Query String)`: **PASS** (Omitted query string, returns full catalogue)
+- `[TEST 07] Empty / Whitespace / Null Category Handling`: **PASS** (Safely defaults to unfiltered query without invalid `?category=`)
+- `[TEST 08] Safe Handling of Empty Query Result`: **PASS** (Category with 0 matches returns `{ success: true, data: { faqs: [] } }` safely)
+- `[TEST 09] FAQ Item Schema & Response Envelope Integrity`: **PASS** (Verified envelope and fields: `_id`, `question`, `answer`, `category`)
+- `[TEST 10] Backend HTTP Error Preservation & Status Propagation`: **PASS** (HTTP 404 preserved accurately without error suppression)
+- **Total: 10 tests | Passed: 10 | Failed: 0**
+
+#### 3. Regression & Build Verification
+- **Regression Suite:** `backend/scripts/verify_phase4_checkpoint1.js` (12/12 PASS).
+- **Regression Suite:** `backend/scripts/verify_skills_api_service_checkpoint2.js` (8/8 PASS).
+- **Regression Suite:** `backend/scripts/verify_skills_ui_checkpoint3.js` (10/10 PASS).
+- **Frontend Production Build:** `npm --prefix frontend run build` completed successfully in 9.65s with zero errors.
+
+---
+
 Next Task:
-Phase 4 — Checkpoint 4: FAQ API Service Layer (frontend/src/api/faq.js)
+Phase 4 — Checkpoint 5: FAQ UI Integration (frontend/src/pages/FAQ.jsx)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 4 - Checkpoint 3: Skills Gap UI Integration")
+Pending user commit approval (Suggested: "Phase 4 - Checkpoint 4: FAQ API Service")
 
 Current Branch:
 main
