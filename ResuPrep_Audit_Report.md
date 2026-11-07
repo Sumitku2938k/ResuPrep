@@ -1214,11 +1214,50 @@ All objectives for **Phase 3: Builder, Templates API, Cover Letter AI** are full
 
 ---
 
+### Phase 4 — Checkpoint 5: FAQ UI Integration
+
+#### 1. Implementation Summary
+- **Integrated Component:** [`frontend/src/pages/FAQ.jsx`](frontend/src/pages/FAQ.jsx)
+- **Removal of Hardcoded FAQ Source:**
+  - Completely removed hardcoded `faqData` dictionary.
+  - Sourced all questions and answers dynamically via `getFAQsApi({ category })` from [`frontend/src/api/faq.js`](frontend/src/api/faq.js).
+  - Maintained zero localStorage or mock data fallbacks.
+- **Category Filtering & Accordion Behavior:**
+  - Preserved the existing responsive sidebar/chips category navigation supporting the 5 backend schema categories (`getting-started`, `resume-analyzer`, `job-matching`, `cv-templates`, `skill-assessment`) plus an `all` ("All Questions") view.
+  - Reset active accordion item index (`openIndex`) safely upon category changes to prevent stale UI state.
+  - Preserved smooth Framer Motion height expansion and chevron rotations.
+- **Defensive Data Handling & Polish:**
+  - Implemented `validFaqs` memoization filtering out items lacking a question or answer.
+  - Handled both API property schemas (`question`/`answer` and legacy `q`/`a`) with stable keys (`_id || id || `${q}-${i}``).
+  - Added honest loading spinner state (`animate-spin`), error alert card with functional retry button (`HiRefresh`), and clean empty-state card (`HiQuestionMarkCircle`).
+
+#### 2. Verification Results (`backend/scripts/verify_faq_ui_checkpoint5.js`)
+- `[TEST 01] API Service Import & Architectural Integrity`: **PASS** (Reuses `faq.js`, calls `getFAQsApi`, no direct axios/fetch)
+- `[TEST 02] Static Mock FAQ Data Eliminated`: **PASS** (Hardcoded `faqData` dictionary removed)
+- `[TEST 03] Supported Schema Category Slugs Present in Filter`: **PASS** (Verified all 5 schema category slugs)
+- `[TEST 04] Accordion Animation & Interactive Structure Preserved`: **PASS** (HiChevronDown, AnimatePresence, and accordion indices intact)
+- `[TEST 05] Loading, Error, Retry, and Empty States Handling in UI`: **PASS** (All 4 states verified with appropriate handlers)
+- `[TEST 06] Live Backend FAQ Fetching with Real Data Retrieval`: **PASS** (Status 200, successfully retrieved persisted DB item)
+- `[TEST 07] Live Backend Category Isolation`: **PASS** (Category queries isolate items without data leaks)
+- `[TEST 08] Safe Handling of Category with Zero FAQs`: **PASS** (Empty categories return `[]` safely without crashing)
+- `[TEST 09] Defensive Question & Answer Extraction`: **PASS** (Protects against malformed items missing fields)
+- `[TEST 10] No LocalStorage or Mock Fallback Substitution`: **PASS** (Pure API data binding confirmed)
+- **Total: 10 tests | Passed: 10 | Failed: 0**
+
+#### 3. Regression & Build Verification
+- **Regression Suite:** `backend/scripts/verify_phase4_checkpoint1.js` (12/12 PASS).
+- **Regression Suite:** `backend/scripts/verify_skills_api_service_checkpoint2.js` (8/8 PASS).
+- **Regression Suite:** `backend/scripts/verify_skills_ui_checkpoint3.js` (10/10 PASS).
+- **Regression Suite:** `backend/scripts/verify_faq_api_service_checkpoint4.js` (10/10 PASS).
+- **Frontend Production Build:** `npm --prefix frontend run build` completed successfully in 48.34s with zero errors.
+
+---
+
 Next Task:
-Phase 4 — Checkpoint 5: FAQ UI Integration (frontend/src/pages/FAQ.jsx)
+Phase 4 — Checkpoint 6: Feedback API Service Layer (frontend/src/api/feedback.js)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 4 - Checkpoint 4: FAQ API Service")
+Pending user commit approval (Suggested: "Phase 4 - Checkpoint 5: FAQ UI Integration")
 
 Current Branch:
 main
