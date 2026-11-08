@@ -1253,11 +1253,52 @@ All objectives for **Phase 3: Builder, Templates API, Cover Letter AI** are full
 
 ---
 
+### Phase 4 — Checkpoint 6: Feedback API Service Layer
+
+#### 1. Implementation Summary
+- **Created Service Module:** [`frontend/src/api/feedback.js`](frontend/src/api/feedback.js)
+- **Functions Implemented:**
+  1. `createFeedbackApi(data = {})`: Submits user feedback via `POST /feedback`. Performs comprehensive client-side pre-flight validation conforming to backend Joi `feedbackSchema`:
+     - `name`: String, 2–50 characters (required, trimmed).
+     - `rating`: Integer between 1 and 5 (required).
+     - `message`: String, 10–1000 characters (required, trimmed).
+     - `role`: Optional string up to 50 characters (defaults to `'User'` on backend).
+     - `feature`: Optional string validated against `['resume-analyzer', 'job-matcher', 'resume-builder', 'cover-letter', 'skill-assessment', 'general']` (defaults to `'general'` on backend).
+  2. `getFeedbackApi(params = {})`: Queries `GET /feedback/public` to retrieve up to 50 public feedback entries sorted newest first.
+- **Architectural Safeguards & Shared Client Reuse:**
+  - Directly reuses `api.post` and `api.get` from [`frontend/src/api/client.js`](frontend/src/api/client.js).
+  - Zero direct `axios` or direct `fetch()` calls.
+  - Zero mock fallback data or localStorage substitution.
+  - Natural error propagation preserving HTTP status codes (e.g. 400 Bad Request, 500) and backend error messages.
+
+#### 2. Verification Results (`backend/scripts/verify_feedback_api_service_checkpoint6.js`)
+- `[TEST 01] Module Exports Verification`: **PASS** (`createFeedbackApi` & `getFeedbackApi` verified)
+- `[TEST 02] Static Code Guardrails & Shared Client Reuse`: **PASS** (Reuses `client.js`, no axios/fetch, no localStorage, no mock data)
+- `[TEST 03] Pre-Flight Input Validation: Name (2-50 chars required)`: **PASS** (Rejected 7/7 invalid names pre-network)
+- `[TEST 04] Pre-Flight Input Validation: Rating (integer 1-5 required)`: **PASS** (Rejected 9/9 invalid ratings pre-network)
+- `[TEST 05] Pre-Flight Input Validation: Message (10-1000 chars required)`: **PASS** (Rejected 6/6 invalid messages pre-network)
+- `[TEST 06] Pre-Flight Input Validation: Feature Enum Restriction`: **PASS** (Rejected 3/3 invalid feature tags pre-network)
+- `[TEST 07] Live Feedback Submission (Minimal Required Fields, Defaults Applied)`: **PASS** (Status 201 Created, defaults applied)
+- `[TEST 08] Live Feedback Submission (All Optional Fields Specified)`: **PASS** (Status 201 Created, custom role & feature saved)
+- `[TEST 09] Live Public Feedback Listing (GET /feedback/public)`: **PASS** (Status 200 OK, retrieved newly submitted public reviews)
+- `[TEST 10] Backend HTTP 400 Error Preservation & Status Propagation`: **PASS** (HTTP 400 status and Joi error message accurately preserved)
+- **Total: 10 tests | Passed: 10 | Failed: 0**
+
+#### 3. Regression & Build Verification
+- **Regression Suite:** `backend/scripts/verify_phase4_checkpoint1.js` (12/12 PASS).
+- **Regression Suite:** `backend/scripts/verify_skills_api_service_checkpoint2.js` (8/8 PASS).
+- **Regression Suite:** `backend/scripts/verify_skills_ui_checkpoint3.js` (10/10 PASS).
+- **Regression Suite:** `backend/scripts/verify_faq_api_service_checkpoint4.js` (10/10 PASS).
+- **Regression Suite:** `backend/scripts/verify_faq_ui_checkpoint5.js` (10/10 PASS).
+- **Frontend Production Build:** `npm --prefix frontend run build` completed successfully in 21.01s with zero errors.
+
+---
+
 Next Task:
-Phase 4 — Checkpoint 6: Feedback API Service Layer (frontend/src/api/feedback.js)
+Phase 4 — Checkpoint 7: Feedback UI Integration (frontend/src/pages/Feedback.jsx)
 
 Last Completed Commit:
-Pending user commit approval (Suggested: "Phase 4 - Checkpoint 5: FAQ UI Integration")
+Pending user commit approval (Suggested: "Phase 4 - Checkpoint 6: Feedback API Service")
 
 Current Branch:
 main
