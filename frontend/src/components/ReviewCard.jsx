@@ -1,15 +1,17 @@
 import { HiStar } from 'react-icons/hi';
 
 export default function ReviewCard({ review }) {
-  const initials = review.name
+  const safeName = review?.name || 'User';
+  const initials = safeName
     .split(' ')
+    .filter(Boolean)
     .map((w) => w[0])
     .join('')
     .toUpperCase()
-    .slice(0, 2);
+    .slice(0, 2) || 'U';
 
   const colors = ['from-primary-500 to-cyan-500', 'from-purple-500 to-pink-500', 'from-amber-500 to-orange-500', 'from-emerald-500 to-teal-500'];
-  const colorClass = colors[review.name.length % colors.length];
+  const colorClass = colors[safeName.length % colors.length];
 
   return (
     <div className="glass-card p-5">
@@ -18,8 +20,8 @@ export default function ReviewCard({ review }) {
           {initials}
         </div>
         <div className="flex-1">
-          <h4 className="font-heading font-bold text-sm text-slate-200">{review.name}</h4>
-          <p className="text-xs text-slate-500">{review.role}</p>
+          <h4 className="font-heading font-bold text-sm text-slate-200">{safeName}</h4>
+          <p className="text-xs text-slate-500">{review?.role || 'User'}</p>
         </div>
         {review.feature && (
           <span className="badge-cyan badge">{review.feature}</span>
