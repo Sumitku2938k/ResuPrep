@@ -1447,6 +1447,91 @@ All 9 checkpoints of Phase 4 (Contract Audit, Skills API Service, Skills UI, FAQ
   - Phase 3: Builder, Templates API, Cover Letter AI — COMPLETED
   - Phase 4: Skills Gap + FAQ + Feedback APIs — COMPLETED
 - **Current Phase:** Phase 5 (Job Matcher)
-- **Next Task:** Phase 5 — Checkpoint 1: Job Matcher Architecture & Backend Contract Audit
-- **Pending Commit:** Pending user commit approval (Suggested: "Phase 4 - Checkpoint 9: Full E2E Verification")
+- **Current Checkpoint:** Checkpoint 1 (Audit Completed)
+- **Next Task:** Phase 5 — Checkpoint 2: Job Model, Schema & Database Seeding
+- **Pending Commit:** Pending user commit approval (Suggested: "Phase 5 - Checkpoint 1: Audit Job Matcher architecture")
 - **Current Branch:** main
+
+---
+
+## Phase 5: Job Matcher (New Backend)
+
+### Phase 5 — Checkpoint 1: Backend & Frontend Audit
+
+#### 1. Audit Overview & Status
+- **Audit Date:** 2026-11-11
+- **Status:** COMPLETED (Audit-Only)
+- **Scope:** Complete inspection of existing frontend Job Matcher (`Jobs.jsx`, `JobCard.jsx`), candidate resume sources (`ResumeAnalysis` vs. `ResumeBuilder`), authentication guards, backend architecture, and missing components.
+- **Source Code Integrity:** 0 lines of application source code modified during this checkpoint.
+
+#### 2. Actual Repository Findings
+- **Frontend (`frontend/src/pages/Jobs.jsx`)**:
+  - Entirely mock-driven and detached from the backend API.
+  - Contains a static `mockJobs` array with 6 hardcoded entries.
+  - Uses `Math.random()` and `setTimeout` (1200ms) to shuffle jobs and invent match percentages.
+  - Form collects manual profile inputs (name, skills string, experience level, education, role) rather than selecting a saved resume.
+  - Zero resume selection capability currently exists.
+  - "View Details" and "Apply Now" buttons in `JobCard.jsx` are inactive dummy elements.
+  - Route `/jobs` is already protected by `ProtectedRoute` in `App.jsx`.
+- **Backend**:
+  - **Zero Job Matcher backend code exists.**
+  - There is no `Job.js` model, no `job.routes.js`, no `job.controller.js`, and no matching service.
+  - Job references in the backend are strictly limited to past `jobDescription` strings in `ResumeAnalysis.js` and enum categories in `FAQ.js` and `Feedback.js`.
+
+#### 3. Resume Data Source Evaluation & Canonical Recommendation
+- **Source A: `ResumeAnalysis` (Phase 2)**:
+  - Stores `resumeText` (raw parsed plain text from PDF/DOCX) and historical `matchedKeywords` / `missingKeywords` relative to a previously analyzed job description.
+  - Lacks an independent, structured list of candidate skills. Using this requires re-tokenizing unstructured text dynamically.
+- **Source B: `ResumeBuilder` (Phase 3)**:
+  - Features an explicit, clean, user-curated `skills: [String]` top-level array, accompanied by structured `experience`, `summary`, and `title`.
+  - Stored in MongoDB (`resumebuilders`) with strict authenticated ownership (`user: req.user._id`).
+- **Canonical Recommendation**:
+  - **Primary Source:** **`ResumeBuilder`**. It provides clean, unambiguous skills, eliminating NLP tokenization errors during deterministic matching.
+  - **User Experience Flow:** The Job Matcher UI will present an authenticated Resume Selector dropdown leveraging `getResumesApi()`. Selecting a resume immediately targets the user's verified skills for matching.
+
+#### 4. Verified Existing Backend Conventions
+- **Routing:** Mount under `/api/v1/jobs` in `backend/src/app.js`.
+- **Controller Pattern:** Async handlers returning standard `ApiResponse.success` / `ApiResponse.created` with `try/catch(next)`.
+- **Validation:** Joi middleware `validate(schema)` enforcing parameter and payload constraints.
+- **Authentication:** `protect` middleware ensuring valid JWT identity on match endpoints; `optionalAuth` for public job browsing.
+- **Error Handling:** Standardized error handler propagating status codes and JSON error messages.
+
+#### 5. Missing Components
+1. `backend/src/models/Job.js` (Mongoose model for seeded job catalogue).
+2. `backend/src/validators/schemas.js` (`matchJobSchema` and `matchPastedJdSchema`).
+3. `backend/src/services/jobMatcher.service.js` (Deterministic normalization and scoring algorithm).
+4. `backend/src/controllers/job.controller.js` (Job listing and matching controllers).
+5. `backend/src/routes/job.routes.js` (Express routes).
+6. Job seed data in `backend/scripts/seed.js` or `backend/scripts/seed_jobs.js`.
+7. `frontend/src/api/jobs.js` (Frontend API client service).
+8. Resume selector, filters, and match breakdown drawer in `frontend/src/pages/Jobs.jsx`.
+
+#### 6. Proposed API Contracts (PROPOSED)
+- `GET /api/v1/jobs`: Public/OptionalAuth listing with search, category, type, and pagination.
+- `GET /api/v1/jobs/:id`: Public/OptionalAuth single job details.
+- `POST /api/v1/jobs/match`: Protected match between an authenticated user's `resumeId` and a selected `jobId`.
+- `POST /api/v1/jobs/match-pasted`: Protected match between `resumeId` and a raw pasted `jobDescription`.
+
+#### 7. Deterministic Matching Algorithm Recommendation
+- **Normalization:** Lowercase, whitespace trim, punctuation strip, and alias mapping (`js` -> `javascript`, `ts` -> `typescript`, `reactjs` -> `react`, etc.).
+- **Formula:**
+  $$\text{Match Percentage} = \text{round}\left( 0.85 \times \frac{|M_{req}|}{|S_{req}|} \times 100 + 0.15 \times \frac{|M_{pref}|}{\max(1, |S_{pref}|)} \times 100 \right)$$
+- Required skills carry 85% of total score; preferred/bonus skills carry 15%.
+- If no preferred skills are listed, required skills carry 100% weight.
+- Returns explicit, explainable breakdowns: `matchedSkills`, `missingSkills`, `matchedPreferredSkills`, `missingPreferredSkills`.
+- Zero `Math.random()`, zero LLM hallucination.
+
+#### 8. Security & Data Protection
+- **Ownership Verification:** All resume lookups query `{ _id: resumeId, user: req.user._id }`. Return HTTP 404 if not found to prevent IDOR and enumeration.
+- **Zero-Trust Identity:** Never trust `userId` from client request parameters.
+- **Request Limits:** Pasted JDs capped at 10,000 characters via Joi schema validation.
+
+#### 9. Phase 5 Implementation Roadmap
+- **Checkpoint 1:** Backend & Frontend Audit *(Completed)*
+- **Checkpoint 2:** Job Model, Mongoose Schema & Database Seeding
+- **Checkpoint 3:** Deterministic Matching Service & Algorithm Unit Tests
+- **Checkpoint 4:** Job Controller & Express API Routes (`/api/v1/jobs`)
+- **Checkpoint 5:** Frontend Job API Service Layer (`frontend/src/api/jobs.js`)
+- **Checkpoint 6:** Job Matcher UI Integration (`Jobs.jsx`, `JobCard.jsx`, Resume Selector)
+- **Checkpoint 7:** Pasted Job Description Matching UI Flow
+- **Checkpoint 8:** Remove Legacy Mock Data & Finalize Phase 5 E2E Verification
