@@ -1447,9 +1447,9 @@ All 9 checkpoints of Phase 4 (Contract Audit, Skills API Service, Skills UI, FAQ
   - Phase 3: Builder, Templates API, Cover Letter AI — COMPLETED
   - Phase 4: Skills Gap + FAQ + Feedback APIs — COMPLETED
 - **Current Phase:** Phase 5 (Job Matcher)
-- **Current Checkpoint:** Checkpoint 1 (Audit Completed)
-- **Next Task:** Phase 5 — Checkpoint 2: Job Model, Schema & Database Seeding
-- **Pending Commit:** Pending user commit approval (Suggested: "Phase 5 - Checkpoint 1: Audit Job Matcher architecture")
+- **Current Checkpoint:** Checkpoint 2 (Architecture & Matching Algorithm Design Completed)
+- **Next Task:** Phase 5 — Checkpoint 3: Job Model, Schema & Database Seeding
+- **Pending Commit:** Pending user commit approval (Suggested: "Phase 5 - Checkpoint 2: Finalize Job Matcher architecture and scoring design")
 - **Current Branch:** main
 
 ---
@@ -1526,12 +1526,260 @@ All 9 checkpoints of Phase 4 (Contract Audit, Skills API Service, Skills UI, FAQ
 - **Zero-Trust Identity:** Never trust `userId` from client request parameters.
 - **Request Limits:** Pasted JDs capped at 10,000 characters via Joi schema validation.
 
-#### 9. Phase 5 Implementation Roadmap
+#### 9. Phase 5 Implementation Roadmap *(Updated in Checkpoint 2)*
 - **Checkpoint 1:** Backend & Frontend Audit *(Completed)*
-- **Checkpoint 2:** Job Model, Mongoose Schema & Database Seeding
-- **Checkpoint 3:** Deterministic Matching Service & Algorithm Unit Tests
-- **Checkpoint 4:** Job Controller & Express API Routes (`/api/v1/jobs`)
-- **Checkpoint 5:** Frontend Job API Service Layer (`frontend/src/api/jobs.js`)
-- **Checkpoint 6:** Job Matcher UI Integration (`Jobs.jsx`, `JobCard.jsx`, Resume Selector)
-- **Checkpoint 7:** Pasted Job Description Matching UI Flow
+- **Checkpoint 2:** Job Matcher Architecture & Matching Algorithm Design *(Completed)*
+- **Checkpoint 3:** Job Model, Mongoose Schema & Database Seeding
+- **Checkpoint 4:** Deterministic Matching Service & Algorithm Unit Tests
+- **Checkpoint 5:** Job Controller & Express API Routes (`/api/v1/jobs`)
+- **Checkpoint 6:** Frontend Job API Service Layer (`frontend/src/api/jobs.js`)
+- **Checkpoint 7:** Job Matcher UI Integration (`Jobs.jsx`, `JobCard.jsx`, Resume Selector & Pasted JD Flow)
 - **Checkpoint 8:** Remove Legacy Mock Data & Finalize Phase 5 E2E Verification
+
+---
+
+### Phase 5 — Checkpoint 2: Job Matcher Architecture & Matching Algorithm Design
+
+#### 1. Architecture Decisions
+- **Stateless On-Demand Matching:** Match results are computed deterministically on demand (`POST /api/v1/jobs/match` and `POST /api/v1/jobs/match-pasted`) rather than persisted as `JobMatch` documents. Because users actively edit `ResumeBuilder` records, on-demand computation guarantees fresh scores without stale cache invalidation overhead.
+- **No LLM Scoring Dependency:** Matching percentages and skill comparisons are 100% deterministic in Node.js. Neither `Math.random()` nor OpenAI API calls are used for scoring, ensuring reproducibility and immunity to external API deprecations (such as the `gpt-3.5-turbo` 404 observed in Phase 4).
+- **Strict Layer Separation:**
+  - `Job` Mongoose model owns catalogue persistence and indexing.
+  - `jobMatcher.service.js` owns pure skill extraction, normalization, and deterministic scoring (zero Express `req`/`res` coupling, enabling isolated unit testing).
+  - `job.controller.js` owns authentication/ownership queries (`ResumeBuilder.findOne({ _id, user: req.user._id })`) and standardized `ApiResponse` formatting.
+  - `validate(schema)` Joi middleware enforces request structure and payload bounds before controllers execute.
+
+#### 2. Final Job Schema Design (`backend/src/models/Job.js`)
+| Field | Type | Required / Default | Validation / Constraints | Indexed / Searchable |
+| :--- | :--- | :--- | :--- | :--- |
+| `title` | `String` | Required | `trim: true`, max 150 chars | Text-searchable |
+| `slug` | `String` | Required, Unique | `lowercase: true`, `trim: true` | Unique index (idempotent seeding) |
+| `company` | `String` | Required | `trim: true`, max 120 chars | Text-searchable |
+| `companyLogo` | `String` | Optional, default `'💼'` | Emoji or image URL string | No |
+| `shortDescription` | `String` | Optional, default `''` | `trim: true`, max 300 chars | No |
+| `description` | `String` | Required | `trim: true` | Text-searchable |
+| `requiredSkills` | `[String]` | Optional, default `[]` | Trimmed non-empty strings | Indexed |
+| `preferredSkills` | `[String]` | Optional, default `[]` | Trimmed non-empty strings | No |
+| `experience` | `Object` | Optional | `min` (Number, min 0, default 0), `max` (Number, default `null`), `level` (enum: `['entry', 'mid', 'senior', 'lead']`, default `'mid'`) | `experience.level` indexed |
+| `location` | `String` | Required | `trim: true` | Indexed / Filterable |
+| `jobType` | `String` | Optional, default `'Full-time'` | Enum: `['Full-time', 'Part-time', 'Contract', 'Internship']` | Indexed / Filterable |
+| `workMode` | `String` | Optional, default `'On-site'` | Enum: `['On-site', 'Remote', 'Hybrid']` | Indexed / Filterable |
+| `salary` | `Object` | Optional | `{ min: Number, max: Number, currency: String (default 'USD'), display: String }` | No |
+| `category` | `String` | Optional, default `'tech'` | Enum: `['tech', 'data', 'design', 'product', 'business', 'devops']` | Indexed / Filterable |
+| `responsibilities` | `[String]` | Optional, default `[]` | Array of strings | No |
+| `qualifications` | `[String]` | Optional, default `[]` | Array of strings | No |
+| `applicationUrl` | `String` | Optional, default `''` | Trimmed URL string | No |
+| `isActive` | `Boolean` | Optional, default `true` | Boolean flag for active listings | Indexed |
+| `timestamps` | `Date` | Auto | `createdAt`, `updatedAt` via Mongoose | No |
+
+- **Duplicate Seeding Prevention:** Seeding scripts will use `Job.findOneAndUpdate({ slug: job.slug }, job, { upsert: true, new: true, setDefaultsOnInsert: true })` keyed on unique `slug` (e.g., `senior-frontend-developer-techflow-inc`), ensuring re-running `seed.js` is 100% idempotent.
+
+#### 3. Canonical Resume Source Decision
+- **Selected Canonical Source:** **`ResumeBuilder`** (`backend/src/models/ResumeBuilder.js`).
+- **Verified Schema Fields:**
+  - `skills: [String]` — explicit, user-curated array of skill strings.
+  - `experience: [{ company, position, location, startDate, endDate, current, description }]` — structured work history.
+  - `projects: [{ name, description, technologies, link }]` — structured project stack.
+  - `summary: String`, `title: String`, `user: ObjectId`.
+- **Why Not `ResumeAnalysis`:** `ResumeAnalysis` does not store an independent candidate skill profile; its `result.matchedKeywords` and `result.missingKeywords` are tied to whatever historical `jobDescription` was analyzed in Phase 2. Using `ResumeBuilder` via existing `getResumesApi()` (`GET /api/v1/builder`) provides clean, deterministic skills with strict per-user ownership.
+
+#### 4. Skill Extraction Approach
+- **From `ResumeBuilder`:**
+  1. Primary source: `resume.skills` (explicit array of strings).
+  2. Optional supplemental source: `resume.projects[].technologies` split by comma (`,`) when non-empty, since it is a dedicated technology-list field.
+  3. **Exclusion rule:** Do **not** extract skills via fuzzy substring matching against free-form `summary` or `experience.description` prose, preventing false positives.
+- **From Pasted Job Descriptions (Flow B):**
+  - Deterministic curated skill-dictionary extractor using boundary-safe regular expressions: `(?:^|[^a-z0-9+#.])(<escapedSkill>)(?=$|[^a-z0-9+#.])` (case-insensitive).
+  - Section awareness: lines appearing under headings matching `preferred|nice to have|bonus|plus` populate `preferredSkills`; all other extracted skills populate `requiredSkills`.
+
+#### 5. Skill Normalization Dictionary & Rules
+1. **Pipeline:** `String(raw).trim().toLowerCase()` $\rightarrow$ collapse internal whitespace $\rightarrow$ strip trailing dots/commas (preserving `node.js`, `next.js`, `c++`, `c#`, `.net`) $\rightarrow$ lookup in canonical alias map $\rightarrow$ deduplicate via `Set`.
+2. **Core Alias Map Examples:**
+   - `js`, `javascript`, `java script`, `ecmascript` $\rightarrow$ `javascript`
+   - `ts`, `typescript`, `type script` $\rightarrow$ `typescript`
+   - `reactjs`, `react.js`, `react js` $\rightarrow$ `react`
+   - `nodejs`, `node.js`, `node js`, `node` $\rightarrow$ `node.js`
+   - `nextjs`, `next.js` $\rightarrow$ `next.js`
+   - `mongo`, `mongo db`, `mongodb` $\rightarrow$ `mongodb`
+   - `postgres`, `postgresql` $\rightarrow$ `postgresql`
+   - `k8s`, `kubernetes` $\rightarrow$ `kubernetes`
+   - `html5` $\rightarrow$ `html`, `css3` $\rightarrow$ `css`
+   - `tailwind`, `tailwindcss`, `tailwind css` $\rightarrow$ `tailwind css`
+3. **Boundary Safety Rule:** Exact normalized token equality for array comparisons and strict non-alphanumeric boundary checks for JD text extraction. `java` never matches `javascript`; `c` never matches `c++` or `css`; `express` never counts as `node.js`.
+4. **Testing Strategy:** Unit tests covering case/whitespace normalization, alias resolution, duplicate collapsing, unknown-skill passthrough, empty/null inputs, and negative boundary pairs (`java` vs `javascript`, `c` vs `c++`).
+
+#### 6. Final Matching Formula & Worked Examples
+- **Formula:**
+  - Let $S_{req}$ = unique normalized required skills, $M_{req} = R \cap S_{req}$.
+  - Let $S_{pref}$ = unique normalized preferred skills, $M_{pref} = R \cap S_{pref}$.
+  - If $|S_{req}| > 0$ and $|S_{pref}| > 0$:
+    $$\text{RequiredScore} = \frac{|M_{req}|}{|S_{req}|} \times 100, \quad \text{PreferredScore} = \frac{|M_{pref}|}{|S_{pref}|} \times 100$$
+    $$\text{MatchPercentage} = \text{Math.round}(0.85 \times \text{RequiredScore} + 0.15 \times \text{PreferredScore})$$
+  - If $|S_{req}| > 0$ and $|S_{pref}| = 0$: $\text{MatchPercentage} = \text{Math.round}(\text{RequiredScore})$ (100% weight on required skills).
+  - If $|S_{req}| = 0$ and $|S_{pref}| > 0$: $\text{MatchPercentage} = \text{Math.round}(\text{PreferredScore})$.
+  - Strictly clamped to $[0, 100]$.
+- **Worked Example:**
+  - Job requires `["JavaScript", "React", "Node.js", "MongoDB"]` (4 required) and prefers `["TypeScript", "Docker"]` (2 preferred).
+  - Resume has `["JS", "ReactJS", "Express", "Docker"]` $\rightarrow$ normalized `{"javascript", "react", "express", "docker"}`.
+  - $M_{req} = \{\text{"javascript"}, \text{"react"}\}$ ($2/4 = 50\%$), $M_{pref} = \{\text{"docker"}\}$ ($1/2 = 50\%$).
+  - $\text{MatchPercentage} = \text{round}(0.85 \times 50 + 0.15 \times 50) = \text{round}(42.5 + 7.5) = 50\%$.
+  - Missing required: `["Node.js", "MongoDB"]` (`Express` does not falsely satisfy `Node.js`).
+- **Experience Compatibility (Separate Indicator):**
+  - Because `ResumeBuilder.experience` uses free-form date strings (`startDate`, `endDate`), experience is reported as a separate `experienceCompatibility` indicator (`status: 'match' | 'partial' | 'below' | 'unknown'`) rather than applying an arbitrary penalty to the numeric skill score.
+
+#### 7. Edge Case Handling
+| Edge Case | Deterministic Behavior |
+| :--- | :--- |
+| Job has no `requiredSkills` & no `preferredSkills` | Return `matchPercentage: 0`, `status: 'insufficient-job-skills'` (never fabricate 100%). |
+| Job has no `preferredSkills` | Required skills receive 100% weight. |
+| Resume has empty `skills` array | Return `matchPercentage: 0`, all job skills listed under missing arrays. |
+| Duplicate skills in resume or job | Deduplicated via normalized `Set` prior to intersection and count; score cannot exceed 100%. |
+| Resume has extra skills beyond job requirements | Extra skills are ignored in denominator; maximum score remains 100%. |
+| Pasted JD has 0 recognizable skills | Return HTTP 200 with `matchPercentage: 0`, `extractedSkillsCount: 0`, and clear UI notice. |
+| Pasted JD empty / < 20 chars / > 10,000 chars | Rejected by Joi middleware with HTTP 400 `Validation failed`. |
+| User has no saved resumes | UI displays empty-resume prompt linking directly to `/builder` to create a resume first. |
+
+#### 8. Matched, Missing & Partial Skills Logic
+- **Matched / Missing:** Preserve human-readable display labels from the job listing (e.g., `"Node.js"`, `"MongoDB"`) while comparing via normalized keys.
+- **Partial Matches:** Keep `partialSkills: []` unless exact version/variant rules are explicitly defined; never equate distinct technologies (e.g., `Express` $\neq$ `Node.js`, `Angular` $\neq$ `React`).
+- **Match Result Payload Structure:**
+  ```json
+  {
+    "matchPercentage": 50,
+    "matchedRequiredSkills": ["JavaScript", "React"],
+    "missingRequiredSkills": ["Node.js", "MongoDB"],
+    "matchedPreferredSkills": ["Docker"],
+    "missingPreferredSkills": ["TypeScript"],
+    "partialSkills": [],
+    "breakdown": {
+      "requiredWeight": 85,
+      "preferredWeight": 15,
+      "requiredScore": 50,
+      "preferredScore": 50,
+      "matchedRequiredCount": 2,
+      "totalRequiredCount": 4,
+      "matchedPreferredCount": 1,
+      "totalPreferredCount": 2
+    },
+    "experienceCompatibility": {
+      "status": "unknown",
+      "requiredLevel": "mid",
+      "requiredMinYears": 2,
+      "note": "Experience dates could not be reliably parsed or are not specified."
+    }
+  }
+  ```
+
+#### 9. Seeded Jobs Data Flow (Flow A)
+1. Authenticated user navigates to `/jobs` (`ProtectedRoute`).
+2. Frontend loads active jobs via `GET /api/v1/jobs` and user's saved resumes via `GET /api/v1/builder`.
+3. User selects a saved resume from the Resume Selector dropdown.
+4. User clicks **Match** on a job card (or triggers batch/individual match).
+5. Frontend calls `POST /api/v1/jobs/match` with `{ resumeId, jobId }`.
+6. Backend `protect` middleware verifies JWT; controller queries `ResumeBuilder.findOne({ _id: resumeId, user: req.user._id })` and `Job.findOne({ _id: jobId, isActive: true })`.
+7. `jobMatcher.service.js` computes deterministic match breakdown and returns HTTP 200 `ApiResponse.success`.
+8. Frontend updates `JobCard` / Match Breakdown Modal with real percentage and matched/missing skill badges.
+
+#### 10. Pasted Job Description Data Flow (Flow B)
+1. User selects a saved resume and switches to the **Paste Job Description** tab/panel.
+2. User pastes JD text (20–10,000 chars) and optional `jobTitle`; frontend validates non-empty length before dispatch.
+3. Frontend calls `POST /api/v1/jobs/match-pasted` with `{ resumeId, jobDescription, jobTitle }`.
+4. Backend `protect` and `validate(matchPastedJdSchema)` verify JWT and payload bounds.
+5. Controller fetches owned `ResumeBuilder` record; `jobMatcher.service.js` extracts `requiredSkills` / `preferredSkills` from `jobDescription` deterministically and computes score.
+6. Backend returns HTTP 200 with `extractedSkills` and the full match breakdown.
+
+#### 11. Proposed API Contracts
+| Endpoint | Method | Auth | Request / Query | Success (HTTP) | Error Codes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `/api/v1/jobs` | `GET` | `optionalAuth` | Query: `search`, `category`, `jobType`, `workMode`, `experienceLevel`, `location`, `page` (default 1), `limit` (default 10, max 50) | `200`: `{ success: true, data: { jobs, pagination: { total, page, limit, pages } } }` | `500` |
+| `/api/v1/jobs/:id` | `GET` | `optionalAuth` | Params: `id` (Mongo ObjectId) | `200`: `{ success: true, data: { job } }` | `400` (invalid ID), `404` (not found) |
+| `/api/v1/jobs/match` | `POST` | `protect` | Body (Joi): `{ resumeId: ObjectId, jobId: ObjectId }` | `200`: `{ success: true, data: { jobId, resumeId, resumeTitle, ...matchResult } }` | `400` (validation), `401` (no auth), `404` (resume/job not found) |
+| `/api/v1/jobs/match-pasted` | `POST` | `protect` | Body (Joi): `{ resumeId: ObjectId, jobDescription: String (20–10000), jobTitle?: String }` | `200`: `{ success: true, data: { resumeId, resumeTitle, jobTitle, extractedSkills, ...matchResult } }` | `400` (validation), `401` (no auth), `404` (resume not found) |
+
+#### 12. Security & Performance Requirements
+- **Authentication:** `protect` middleware mandatory on `/match` and `/match-pasted`. `optionalAuth` on `GET /jobs` and `GET /jobs/:id`.
+- **Ownership Enforcement:** `ResumeBuilder.findOne({ _id: resumeId, user: req.user._id })` enforced at DB query level. Never accept `userId` from client body.
+- **Validation & DoS Guard:** Joi validation strips unknown keys (`stripUnknown: true`), caps `jobDescription` at 10,000 chars, caps `limit` at 50 per page, and validates ObjectId formats.
+- **Privacy:** Match responses return only skill comparison metadata and `resumeTitle`, never leaking raw personal contact info or full resume documents unnecessarily.
+
+#### 13. Mermaid Architecture Diagram
+```mermaid
+flowchart LR
+  UI["React Jobs UI (Jobs.jsx / JobCard.jsx)"] --> ApiSvc["Frontend API Service (api/jobs.js + api/builder.js)"]
+  ApiSvc --> Client["Shared API Client (api/client.js + JWT/Cookie)"]
+  Client --> Router["Express Router (/api/v1/jobs)"]
+  Router --> Auth["Auth Middleware (protect / optionalAuth)"]
+  Auth --> Joi["Joi Validation (validate.js)"]
+  Joi --> Ctrl["Job Controller (job.controller.js)"]
+  Ctrl --> ResumeModel[("MongoDB: ResumeBuilder (Owned by req.user._id)")]
+  Ctrl --> JobModel[("MongoDB: Job (Active Catalogue)")]
+  Ctrl --> Matcher["Deterministic Matching Service (jobMatcher.service.js)"]
+  Matcher --> Ctrl
+  Ctrl --> ApiResp["ApiResponse JSON (200 / 400 / 401 / 404)"]
+  ApiResp --> UI
+```
+
+#### 14. Sequence Diagrams
+
+##### Flow A: Seeded Job Matching
+```mermaid
+sequenceDiagram
+  actor User
+  participant UI as Jobs.jsx
+  participant API as api/jobs.js
+  participant Auth as protect + validate
+  participant Ctrl as job.controller.js
+  participant DB as MongoDB (ResumeBuilder & Job)
+  participant Svc as jobMatcher.service.js
+
+  User->>UI: Select Resume & Click Match on Job
+  UI->>API: matchJobApi({ resumeId, jobId })
+  API->>Auth: POST /api/v1/jobs/match (Bearer JWT / Cookie)
+  Auth->>Ctrl: req.user._id + validated body
+  Ctrl->>DB: ResumeBuilder.findOne({ _id: resumeId, user: req.user._id })
+  DB-->>Ctrl: Resume document (or null -> 404)
+  Ctrl->>DB: Job.findOne({ _id: jobId, isActive: true })
+  DB-->>Ctrl: Job document (or null -> 404)
+  Ctrl->>Svc: calculateJobMatch(resume, job)
+  Svc-->>Ctrl: Deterministic score & skill breakdown
+  Ctrl-->>UI: 200 ApiResponse { matchPercentage, matched/missing skills }
+  UI-->>User: Render match badge & skill breakdown
+```
+
+##### Flow B: Pasted Job Description Matching
+```mermaid
+sequenceDiagram
+  actor User
+  participant UI as Jobs.jsx
+  participant API as api/jobs.js
+  participant Auth as protect + validate
+  participant Ctrl as job.controller.js
+  participant DB as MongoDB (ResumeBuilder)
+  participant Svc as jobMatcher.service.js
+
+  User->>UI: Select Resume, Paste JD & Submit
+  UI->>API: matchPastedJdApi({ resumeId, jobDescription, jobTitle })
+  API->>Auth: POST /api/v1/jobs/match-pasted (Joi: 20-10000 chars)
+  Auth->>Ctrl: req.user._id + validated body
+  Ctrl->>DB: ResumeBuilder.findOne({ _id: resumeId, user: req.user._id })
+  DB-->>Ctrl: Resume document (or null -> 404)
+  Ctrl->>Svc: extractSkillsFromJD(jobDescription)
+  Svc-->>Ctrl: { requiredSkills, preferredSkills }
+  Ctrl->>Svc: calculateJobMatch(resume, extractedJob)
+  Svc-->>Ctrl: Deterministic score & skill breakdown
+  Ctrl-->>UI: 200 ApiResponse { extractedSkills, matchPercentage, breakdown }
+  UI-->>User: Render extracted skills & match breakdown
+```
+
+#### 15. Future Implementation Checkpoint Dependencies
+- **Checkpoint 3 (Job Model & Seeding)** depends on: Schema design (§2) and idempotent `slug` upsert strategy.
+- **Checkpoint 4 (Matching Service)** depends on: Normalization dictionary (§5), boundary-safe JD extractor (§4), and 85/15 scoring formula (§6).
+- **Checkpoint 5 (Controller & Routes)** depends on: Checkpoints 3 & 4 + API contracts (§11) + security guards (§12).
+- **Checkpoint 6 (Frontend API Service)** depends on: Checkpoint 5 endpoints + existing `client.js`.
+- **Checkpoint 7 (Frontend UI Integration)** depends on: Checkpoint 6 + `getResumesApi()` from `builder.js`.
+- **Checkpoint 8 (Cleanup & E2E Verification)** depends on: Checkpoints 3–7 completion.
+
+#### 16. Remaining Risks & Unresolved Decisions
+- **Date Parsing Ambiguity in `ResumeBuilder.experience`:** Experience dates are unstructured strings; Checkpoint 4 should keep `experienceCompatibility` as a non-penalizing informational indicator unless structured date fields are introduced later.
+- **Users With Zero `ResumeBuilder` Records:** Users who only used Phase 2 Resume Analyzer (uploaded PDF) without creating a `ResumeBuilder` record will need a clear CTA in `Jobs.jsx` directing them to `/builder` (or an optional future enhancement to import skills from `ResumeAnalysis`).
+- **Curated JD Dictionary Coverage:** Pasted JD extraction accuracy depends on maintaining a thorough skill dictionary in `jobMatcher.service.js`; niche domain terms outside the dictionary may not be extracted without optional future AI extraction.
