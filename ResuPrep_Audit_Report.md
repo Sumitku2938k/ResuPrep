@@ -1447,9 +1447,9 @@ All 9 checkpoints of Phase 4 (Contract Audit, Skills API Service, Skills UI, FAQ
   - Phase 3: Builder, Templates API, Cover Letter AI — COMPLETED
   - Phase 4: Skills Gap + FAQ + Feedback APIs — COMPLETED
 - **Current Phase:** Phase 5 (Job Matcher)
-- **Current Checkpoint:** Checkpoint 2 (Architecture & Matching Algorithm Design Completed)
-- **Next Task:** Phase 5 — Checkpoint 3: Job Model, Schema & Database Seeding
-- **Pending Commit:** Pending user commit approval (Suggested: "Phase 5 - Checkpoint 2: Finalize Job Matcher architecture and scoring design")
+- **Current Checkpoint:** Checkpoint 3 (Job Model & Seed Data Completed)
+- **Next Task:** Phase 5 — Checkpoint 4: Deterministic Matching Service & Algorithm Unit Tests
+- **Pending Commit:** Pending user commit approval (Suggested: "Phase 5 - Checkpoint 3: Implement Job model and idempotent seed catalogue")
 - **Current Branch:** main
 
 ---
@@ -1529,7 +1529,7 @@ All 9 checkpoints of Phase 4 (Contract Audit, Skills API Service, Skills UI, FAQ
 #### 9. Phase 5 Implementation Roadmap *(Updated in Checkpoint 2)*
 - **Checkpoint 1:** Backend & Frontend Audit *(Completed)*
 - **Checkpoint 2:** Job Matcher Architecture & Matching Algorithm Design *(Completed)*
-- **Checkpoint 3:** Job Model, Mongoose Schema & Database Seeding
+- **Checkpoint 3:** Job Model, Mongoose Schema & Database Seeding *(Completed)*
 - **Checkpoint 4:** Deterministic Matching Service & Algorithm Unit Tests
 - **Checkpoint 5:** Job Controller & Express API Routes (`/api/v1/jobs`)
 - **Checkpoint 6:** Frontend Job API Service Layer (`frontend/src/api/jobs.js`)
@@ -1783,3 +1783,134 @@ sequenceDiagram
 - **Date Parsing Ambiguity in `ResumeBuilder.experience`:** Experience dates are unstructured strings; Checkpoint 4 should keep `experienceCompatibility` as a non-penalizing informational indicator unless structured date fields are introduced later.
 - **Users With Zero `ResumeBuilder` Records:** Users who only used Phase 2 Resume Analyzer (uploaded PDF) without creating a `ResumeBuilder` record will need a clear CTA in `Jobs.jsx` directing them to `/builder` (or an optional future enhancement to import skills from `ResumeAnalysis`).
 - **Curated JD Dictionary Coverage:** Pasted JD extraction accuracy depends on maintaining a thorough skill dictionary in `jobMatcher.service.js`; niche domain terms outside the dictionary may not be extracted without optional future AI extraction.
+
+---
+
+### Phase 5 — Checkpoint 3: Job Model & Seed Data
+
+#### 1. Implementation Summary
+- **Mongoose Job Model:** Implemented in [`backend/src/models/Job.js`](backend/src/models/Job.js) conforming strictly to the Checkpoint 2 approved architecture.
+- **Dedicated Seeding Script:** Created [`backend/scripts/seed_jobs.js`](backend/scripts/seed_jobs.js) implementing an idempotent upsert mechanism keyed on unique `slug`.
+- **Sample Job Catalogue:** Seeded 15 realistic demonstration job listings across 6 categories (`tech`, `data`, `design`, `product`, `business`, `devops`).
+- **NPM Script Support:** Added `"seed:jobs": "node scripts/seed_jobs.js"` to [`backend/package.json`](backend/package.json).
+- **Automated Verification Suite:** Created and executed [`backend/scripts/verify_job_model_checkpoint3.js`](backend/scripts/verify_job_model_checkpoint3.js) verifying 32 assertions covering model structure, field validation, database persistence, and seed idempotency.
+
+#### 2. Job Model Schema Details
+- **Core Document Fields:**
+  - `title`: String, required, trimmed, max 150 characters.
+  - `slug`: String, required, unique, lowercase, trimmed.
+  - `company`: String, required, trimmed, max 120 characters.
+  - `companyLogo`: String, optional, default `'💼'`.
+  - `shortDescription`: String, optional, default `''`, max 300 characters.
+  - `description`: String, required, trimmed.
+  - `requiredSkills`: `[String]`, default `[]`, empty/whitespace strings rejected.
+  - `preferredSkills`: `[String]`, default `[]`, empty/whitespace strings rejected.
+  - `location`: String, required, trimmed.
+  - `jobType`: String, enum (`['Full-time', 'Part-time', 'Contract', 'Internship']`), default `'Full-time'`.
+  - `workMode`: String, enum (`['On-site', 'Remote', 'Hybrid']`), default `'On-site'`.
+  - `category`: String, enum (`['tech', 'data', 'design', 'product', 'business', 'devops']`), default `'tech'`.
+  - `responsibilities`: `[String]`, default `[]`.
+  - `qualifications`: `[String]`, default `[]`.
+  - `applicationUrl`: String, optional, validated for valid HTTP/HTTPS URL when supplied.
+  - `isActive`: Boolean, default `true`.
+  - `timestamps`: Auto-managed `createdAt` and `updatedAt`.
+- **Experience Subdocument (`experience`):**
+  - `min`: Number, min 0, default 0.
+  - `max`: Number or null, default null.
+  - `level`: String, enum (`['entry', 'mid', 'senior', 'lead']`), default `'mid'`.
+  - *Validation:* `max >= min` and non-negative amounts enforced via schema and pre-validate hooks.
+- **Salary Subdocument (`salary`):**
+  - `min`: Number or null, default null, min 0.
+  - `max`: Number or null, default null.
+  - `currency`: String, default `'USD'`, trimmed, uppercase.
+  - `display`: String, default `''`, trimmed.
+  - *Validation:* Non-negative amounts and `max >= min` enforced when both are provided.
+
+#### 3. Indexing Strategy
+| Index Key | Index Type | Purpose |
+| :--- | :--- | :--- |
+| `{ slug: 1 }` | Unique B-Tree | Enforces unique slug constraint; powers fast lookup by slug in seed upserts and detail endpoints. |
+| `{ isActive: 1 }` | B-Tree | Filters active job vacancies for client catalogue queries. |
+| `{ category: 1 }` | B-Tree | Accelerates category navigation tab queries (`tech`, `data`, `design`, etc.). |
+| `{ jobType: 1 }` | B-Tree | Optimizes job type filter queries (Full-time, Part-time, Contract, Internship). |
+| `{ workMode: 1 }` | B-Tree | Optimizes work mode filter queries (Remote, Hybrid, On-site). |
+| `{ location: 1 }` | B-Tree | Optimizes geographic/city filtering. |
+| `{ "experience.level": 1 }` | B-Tree | Filters jobs by candidate seniority level (`entry`, `mid`, `senior`, `lead`). |
+| `{ title: 'text', company: 'text', description: 'text' }` | Text Index (Compound with Weights) | Enables full-text search across job titles (weight 10), companies (weight 5), and descriptions (weight 1). |
+
+#### 4. Seed Data Overview
+- **Seeded Items:** 15 comprehensive demonstration jobs across 6 industry categories:
+  - **tech (6 jobs):** Senior Frontend Developer (TechFlow), Full Stack Engineer (DataVault), Backend Node.js Developer (CloudScale), Python Backend Developer (FinTech Nexus), React Native Mobile Engineer (AppSphere), QA Automation Engineer (QualityPulse).
+  - **data (3 jobs):** Senior Data Analyst (MetricWave), Machine Learning Engineer (NeuralCore AI), Data Platform Engineer (Lakehouse Dynamics).
+  - **devops (2 jobs):** Senior DevOps Engineer (PlatformOps Global), Cloud Infrastructure & SRE (Skyline Cloud).
+  - **design (2 jobs):** Product UI/UX Designer (DesignCraft), Lead Product Designer (UserFirst).
+  - **product (1 job):** Technical Product Manager (RoadmapIQ).
+  - **business (1 job):** Enterprise Solutions Architect (Vanguard Business Solutions).
+
+#### 5. Duplicate Prevention & Seed Idempotency
+- **Mechanism:** `Job.findOneAndUpdate({ slug: job.slug }, { $set: job }, { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true })`.
+- **Collection Safety:** Never calls `Job.deleteMany({})`. Existing jobs outside the seed catalogue are preserved intact.
+- **Verification Result:** Repeated execution of `npm run seed:jobs` resulted in 0 new insertions, 15 updates, and 0 duplicate slugs across the collection.
+
+#### 6. Database Configuration & Verification
+- **Database Used:** Local persistent MongoDB instance (`127.0.0.1:27017/ResuPrep`).
+- **Connection Host:** Verified on `127.0.0.1`.
+
+#### 7. Verification Test Results (`backend/scripts/verify_job_model_checkpoint3.js`)
+```text
+--- SECTION A: MODEL STRUCTURE ---
+[TEST 01] ✅ PASS: Job Model Exports Correctly as Mongoose Model
+[TEST 02] ✅ PASS: Required Fields Configured (title, slug, company, description, location)
+[TEST 03] ✅ PASS: Default Values Properly Applied Across Subdocuments
+[TEST 04] ✅ PASS: Schema Enums Configured Correctly (jobType, workMode, category, experience.level)
+[TEST 05] ✅ PASS: Mongoose Timestamps Enabled on Job Schema
+[TEST 06] ✅ PASS: Unique Constraint Declared on Slug Field
+
+--- SECTION B: VALIDATION RULES ---
+[TEST 07] ✅ PASS: Valid Job Document Passes Mongoose Validation
+[TEST 08] ✅ PASS: Validation Rejects Missing Job Title
+[TEST 09] ✅ PASS: Validation Rejects Missing Company Name
+[TEST 10] ✅ PASS: Validation Rejects Missing Job Description
+[TEST 11] ✅ PASS: Validation Rejects Missing Location
+[TEST 12] ✅ PASS: Validation Rejects Invalid jobType Enum Value
+[TEST 13] ✅ PASS: Validation Rejects Invalid workMode Enum Value
+[TEST 14] ✅ PASS: Validation Rejects Invalid Category Enum Value
+[TEST 15] ✅ PASS: Validation Rejects Invalid Experience Level Value
+[TEST 16] ✅ PASS: Validation Rejects Negative Experience Minimum
+[TEST 17] ✅ PASS: Validation Rejects Maximum Experience Lower Than Minimum
+[TEST 18] ✅ PASS: Validation Rejects Negative Salary Amounts
+[TEST 19] ✅ PASS: Validation Rejects Maximum Salary Lower Than Minimum
+[TEST 20] ✅ PASS: Validation Rejects Non-HTTP/HTTPS Application URL
+[TEST 21] ✅ PASS: Validation Rejects Empty / Whitespace-Only Skill Strings
+
+--- SECTION C: DATABASE PERSISTENCE ---
+[TEST 22] ✅ PASS: Valid Job Document Persists to Database with Timestamps
+[TEST 23] ✅ PASS: Saved Job Retrieved Accurately by Unique Slug
+[TEST 24] ✅ PASS: Job Document Update Persists with Validator Enforcement
+[TEST 25] ✅ PASS: Duplicate Slug Insertion Blocked by MongoDB Unique Constraint (E11000)
+[TEST 26] ✅ PASS: MongoDB Collection Indexes Verified (slug_1, JobTextIndex, category_1, isActive_1)
+
+--- SECTION D: SEED IDEMPOTENCY & SAFETY ---
+[TEST 27] ✅ PASS: First Seed Run Inserts 15 Approved Sample Jobs into MongoDB
+[TEST 28] ✅ PASS: Second Seed Run is 100% Idempotent (0 New Insertions, 15 Updates)
+[TEST 29] ✅ PASS: Idempotent Upsert Updates Existing Job Data on Seed Source Changes
+[TEST 30] ✅ PASS: Jobs Outside Seed Dataset are Preserved (No deleteMany Safety)
+[TEST 31] ✅ PASS: Slug Uniqueness Across Entire Collection Verified (0 Duplicates)
+[TEST 32] ✅ PASS: Seed Script Returns Structured Execution Counts & Closes Connections
+
+Total Tests: 32 | Passed: 32 | Failed: 0 (100% Pass Rate)
+```
+
+#### 8. Files Created and Modified
+- **Created:**
+  - [`backend/src/models/Job.js`](backend/src/models/Job.js) (Mongoose Job model with validation and indexes).
+  - [`backend/scripts/seed_jobs.js`](backend/scripts/seed_jobs.js) (Dedicated idempotent seeding script with 15 sample jobs).
+  - [`backend/scripts/verify_job_model_checkpoint3.js`](backend/scripts/verify_job_model_checkpoint3.js) (Comprehensive 32-assertion verification test suite).
+- **Modified:**
+  - [`backend/package.json`](backend/package.json) (Added `"seed:jobs": "node scripts/seed_jobs.js"`).
+  - [`ResuPrep_Audit_Report.md`](ResuPrep_Audit_Report.md) (Appended Checkpoint 3 documentation and updated progress overview).
+
+#### 9. Remaining Risks & Next Steps
+- **Next Step:** Implement Phase 5 Checkpoint 4: Deterministic Matching Service & Algorithm Unit Tests (`backend/src/services/jobMatcher.service.js`).
+- **No Blockers:** The Job collection is indexed, seeded with 15 production-grade demonstration records in MongoDB, and ready to be matched against candidate resumes.
+
