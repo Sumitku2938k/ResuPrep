@@ -16,7 +16,7 @@ todos:
     status: completed
   - id: phase-5-jobs
     content: "Phase 5: Job Matcher (new backend)"
-    status: pending
+    status: in_progress
   - id: phase-6-assessment
     content: "Phase 6: Skill Assessment persistence"
     status: pending
@@ -1911,6 +1911,162 @@ Total Tests: 32 | Passed: 32 | Failed: 0 (100% Pass Rate)
   - [`ResuPrep_Audit_Report.md`](ResuPrep_Audit_Report.md) (Appended Checkpoint 3 documentation and updated progress overview).
 
 #### 9. Remaining Risks & Next Steps
-- **Next Step:** Implement Phase 5 Checkpoint 4: Deterministic Matching Service & Algorithm Unit Tests (`backend/src/services/jobMatcher.service.js`).
-- **No Blockers:** The Job collection is indexed, seeded with 15 production-grade demonstration records in MongoDB, and ready to be matched against candidate resumes.
+- **Completed:** Phase 5 Checkpoint 4: Deterministic Matching Service & Algorithm Unit Tests (`backend/src/services/jobMatcher.service.js`).
+- **Next Step:** Implement Phase 5 Checkpoint 5: Job Controller & Express API Routes (`/api/v1/jobs`).
+- **No Blockers:** The deterministic matching engine is fully verified (44/44 unit tests passing) and ready for controller integration.
+
+---
+
+### Phase 5 — Checkpoint 4: Resume Skill Extraction & Deterministic Matching Service
+
+#### 1. Implementation Summary
+- **Dedicated Pure Service Module:** Created [`backend/src/services/jobMatcher.service.js`](backend/src/services/jobMatcher.service.js) implementing pure, deterministic, and stateless skill extraction, alias normalization, JD parsing, and match calculation.
+- **Architectural Isolation:** Strictly independent of Express (`req`/`res`), HTTP status codes, Mongoose queries, database models, and external OpenAI/LLM APIs.
+- **Zero Stochastic Drift:** Strictly contains zero `Math.random()`, zero random tie-breakers, and zero non-deterministic logic. 100 repeated executions produce 100% identical match percentages and breakdowns.
+- **Automated Unit Test Suite:** Implemented [`backend/scripts/verify_job_matcher_checkpoint4.js`](backend/scripts/verify_job_matcher_checkpoint4.js) covering 44 automated test assertions across 5 testing groups (A–E).
+- **NPM Script Support:** Registered `"test:job-matcher": "node scripts/verify_job_matcher_checkpoint4.js"` in [`backend/package.json`](backend/package.json).
+- **Test Results:** 44 out of 44 tests passed with 100% success rate (`npm run test:job-matcher`).
+
+#### 2. Exported Core Functions
+| Function | Signature | Responsibility |
+| :--- | :--- | :--- |
+| `normalizeSkill` | `(rawSkill: string) => string` | Trims, strips surrounding punctuation (safely preserving internal symbols in `C++`, `C#`, `.NET`, `Node.js`), downcases, and maps to canonical alias. |
+| `normalizeSkills` | `(skillsArray: Array) => Array<string>` | Normalizes and deduplicates an array of skill strings, discarding invalid/empty values. |
+| `extractResumeSkills` | `(resume: Object) => Array<string>` | Extracts canonical skills from `resume.skills` (primary) and `resume.projects[].technologies` (supplemental). Strictly ignores `summary` and `experience[].description`. |
+| `extractSkillsFromJD` | `(jobDescription: string) => Object` | Extracts tech skills from raw JD text via curated dictionary and boundary-safe regexes, classifying skills into `requiredSkills` vs `preferredSkills` based on section headings. |
+| `calculateExperienceCompatibility` | `(resume: Object, job: Object) => Object` | Evaluates candidate experience tenure conservatively against job requirements. Strictly isolated from numeric match percentage (never penalizes skill score). |
+| `calculateJobMatch` | `(resume: Object, job: Object) => Object` | Computes deterministic skill match percentage using approved 85/15 weighting, returning matched/missing skill lists and breakdown. |
+
+#### 3. Canonical Normalization & Alias Mapping
+- **Alias Map:** Curated canonical dictionary mapping abbreviations and common spelling variations to canonical keys (e.g., `js`, `javascript`, `java script`, `ecmascript` → `'javascript'`; `reactjs`, `react.js`, `react js` → `'react'`; `k8s` → `'kubernetes'`).
+- **Symbol Preservation:** Explicitly preserves programming languages with symbols: `C++`, `C#`, `.NET`, `CI/CD`.
+- **Boundary Distinctions:**
+  - `Java` (`'java'`) strictly never equates or maps to `JavaScript` (`'javascript'`).
+  - `C` (`'c'`) strictly never equates or maps to `C++` (`'c++'`) or `CSS` (`'css'`).
+  - `Express` (`'express'`) strictly never equates to `Node.js` (`'node.js'`).
+  - `TypeScript` (`'typescript'`) strictly distinct from `JavaScript` (`'javascript'`).
+
+#### 4. Job Description Text Extraction
+- **Curated Tech Dictionary:** Contains 50+ industry technical skills with boundary-safe regular expressions.
+- **Punctuation & Word Boundaries:**
+  - Word-based technologies leverage boundary checks to prevent false substrings (`java` does not match in `JavaScript`; `c` does not match in `CSS` or `C++`).
+  - Negative lookbehind avoids false positives (e.g. `js` inside `Node.js.` is not falsely extracted as standalone `JavaScript`).
+  - Handles sentence-ending punctuation gracefully (`TypeScript.`, `Node.js.`, `C++.`, `CI/CD.`).
+- **Section Classification:**
+  - Detects heading transitions: `Preferred Skills:`, `Nice to Have:`, `Bonus:` switch extractor into preferred mode.
+  - Reset headings: `Requirements:`, `Required Qualifications:`, `Responsibilities:`, `What We Offer:` switch extractor back into required mode.
+  - Heading recognition requires line-level heading structure, preventing body sentences like `"Must have hands-on experience in C++..."` from being skipped or misidentified as section headers.
+
+#### 5. Deterministic Matching & Scoring Formula
+- **Deduplication:** Normalizes and deduplicates resume skills and job requirements before scoring. If a skill appears in both `requiredSkills` and `preferredSkills`, it is deduplicated to `requiredSkills`.
+- **Formula:**
+  $$\text{Match Percentage} = \operatorname{round}\left(0.85 \times \frac{|\text{Matched Req}|}{|\text{Total Req}|} \times 100 + 0.15 \times \frac{|\text{Matched Pref}|}{|\text{Total Pref}|} \times 100\right)$$
+- **Boundary Rules:**
+  - If a job specifies only `requiredSkills` (0 preferred): Required skills receive 100% weight ($1.00 \times \text{ReqScore}$).
+  - If a job specifies only `preferredSkills` (0 required): Preferred skills receive 100% weight ($1.00 \times \text{PrefScore}$).
+  - If a job has 0 required and 0 preferred skills: Match percentage is 0% and status returns `'insufficient-job-skills'`.
+  - Extraneous skills in candidate resume do not inflate score.
+  - Score is strictly clamped to an integer between 0 and 100 inclusive.
+- **Output Structure:**
+  ```javascript
+  {
+    matchPercentage: 50,
+    matchedRequiredSkills: ['JavaScript', 'React'],
+    missingRequiredSkills: ['Node.js', 'MongoDB'],
+    matchedPreferredSkills: ['Docker'],
+    missingPreferredSkills: ['AWS'],
+    partialSkills: [], // Intentionally empty array per specification
+    experienceCompatibility: {
+      status: 'match', // 'match' | 'near' | 'gap' | 'unknown'
+      requiredLevel: 'mid',
+      requiredMinYears: 3,
+      estimatedYears: 5,
+      note: '...'
+    },
+    breakdown: {
+      requiredWeight: 0.85,
+      preferredWeight: 0.15,
+      requiredScore: 50,
+      preferredScore: 50,
+      totalRequiredCount: 4,
+      matchedRequiredCount: 2,
+      totalPreferredCount: 2,
+      matchedPreferredCount: 1
+    },
+    status: 'success'
+  }
+  ```
+
+#### 6. Automated Verification Test Results (`backend/scripts/verify_job_matcher_checkpoint4.js`)
+```text
+--- GROUP A: MODULE & RESUME SKILL EXTRACTION ---
+[TEST 01] ✅ PASS: Service Exports All Required Core Functions
+[TEST 02] ✅ PASS: Resume Skills Extracted from resume.skills
+[TEST 03] ✅ PASS: Project Technologies Split & Merged Correctly
+[TEST 04] ✅ PASS: Summary Text Strictly Excluded from Skill Extraction
+[TEST 05] ✅ PASS: Experience Description Strictly Excluded from Skill Extraction
+[TEST 06] ✅ PASS: Null, Undefined, and Empty Elements Handled Safely
+[TEST 07] ✅ PASS: Duplicate Skills and Alias Collisions Filtered on Extraction
+
+--- GROUP B: NORMALIZATION ENGINE ---
+[TEST 08] ✅ PASS: JS Resolves to Canonical "javascript"
+[TEST 09] ✅ PASS: Javascript, JavaScript, and Java Script Resolve to "javascript"
+[TEST 10] ✅ PASS: ReactJS, React.js, and React JS Resolve to "react"
+[TEST 11] ✅ PASS: NodeJS, Node.js, and Node Resolve to "node.js"
+[TEST 12] ✅ PASS: Mongo DB, Mongo, and MongoDB Resolve to "mongodb"
+[TEST 13] ✅ PASS: TS, TypeScript, and Type Script Resolve to "typescript"
+[TEST 14] ✅ PASS: Tailwind, TailwindCSS, and Tailwind CSS Resolve to "tailwind css"
+[TEST 15] ✅ PASS: Unknown Valid Skills Preserved with Lowercase Normalization
+[TEST 16] ✅ PASS: Surrounding and Redundant Internal Whitespace Collapsed
+[TEST 17] ✅ PASS: Punctuation-Heavy Languages Preserved (C++, C#, .NET)
+[TEST 18] ✅ PASS: Boundary Safety: "Java" NEVER Matches "JavaScript"
+[TEST 19] ✅ PASS: Boundary Safety: "C" NEVER Matches "C++" or "CSS"
+[TEST 20] ✅ PASS: Distinction: "Express" NEVER Automatically Equates to "Node.js"
+
+--- GROUP C: MATCHING ENGINE & SCORING ---
+[TEST 21] ✅ PASS: Approved 85/15 Scoring Formula Yields Exact Expected 50%
+[TEST 22] ✅ PASS: Required-Only Job Assigns 100% Weight to Required Skills (75%)
+[TEST 23] ✅ PASS: Preferred-Only Job Assigns 100% Weight to Preferred Skills (50%)
+[TEST 24] ✅ PASS: Fully Matched Candidate Produces Exactly 100%
+[TEST 25] ✅ PASS: Zero Matching Skills Yields Exactly 0% with All Skills Missing
+[TEST 26] ✅ PASS: Empty Candidate Resume Lists All Job Skills Under Missing Arrays
+[TEST 27] ✅ PASS: Duplicate Skills and Cross-List Collisions Deduplicated Before Scoring
+[TEST 28] ✅ PASS: Extraneous Candidate Skills Do Not Artificially Alter Score (50%)
+[TEST 29] ✅ PASS: Preserves Original Readable Display Labels in Output
+[TEST 30] ✅ PASS: Job with Zero Skills Returns 0% and "insufficient-job-skills"
+[TEST 31] ✅ PASS: Partial Skills Remains Empty Array (No Arbitrary Equivalency)
+[TEST 32] ✅ PASS: Experience Evaluation Isolated from Numeric Skill Match Percentage
+
+--- GROUP D: JOB DESCRIPTION TEXT EXTRACTION ---
+[TEST 33] ✅ PASS: Recognizes Core Stack from Unstructured Text (JS, React, Node, Mongo)
+[TEST 34] ✅ PASS: Recognizes Punctuation-Heavy Technologies (C++, C#, .NET, CI/CD)
+[TEST 35] ✅ PASS: Preferred Skills Heading Correctly Partitions Skills
+[TEST 36] ✅ PASS: Preferred Section Context Resets Cleanly on Subsequent Heading
+[TEST 37] ✅ PASS: Boundary Check: "Java" Not Falsely Extracted from "JavaScript"
+[TEST 38] ✅ PASS: Boundary Check: "C" Not Falsely Extracted from "CSS" or "C++"
+[TEST 39] ✅ PASS: Deduplicates Alias Variants Found Within the Same JD Text
+[TEST 40] ✅ PASS: Returns "no-skills-found" When Zero Tech Skills are Detected
+[TEST 41] ✅ PASS: Null, Non-String, and Whitespace-Only JD Inputs Handled Safely
+
+--- GROUP E: DETERMINISM & REPRODUCIBILITY ---
+[TEST 42] ✅ PASS: 100 Repeated Executions Produce 100% Identical Output
+[TEST 43] ✅ PASS: Output Invariant to Input Skill Array Permutation
+[TEST 44] ✅ PASS: Source Code Contains Zero Math.random() or External AI Invocations
+
+===================================================================
+VERIFICATION SUMMARY: ALL TESTS PASSED ✅
+Total Tests: 44 | Passed: 44 | Failed: 0 (100% Pass Rate)
+===================================================================
+```
+
+#### 7. Files Created and Modified
+- **Created:**
+  - [`backend/src/services/jobMatcher.service.js`](backend/src/services/jobMatcher.service.js) (Stateless, deterministic resume skill extraction and matching engine).
+  - [`backend/scripts/verify_job_matcher_checkpoint4.js`](backend/scripts/verify_job_matcher_checkpoint4.js) (44-assertion automated unit test suite).
+- **Modified:**
+  - [`backend/package.json`](backend/package.json) (Added `"test:job-matcher": "node scripts/verify_job_matcher_checkpoint4.js"`).
+  - [`ResuPrep_Audit_Report.md`](ResuPrep_Audit_Report.md) (Appended Checkpoint 4 documentation).
+
+#### 8. Next Step
+- **Next Task:** Phase 5 — Checkpoint 5: Job Controller & Express API Routes (`/api/v1/jobs`).
 
