@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node scripts/seed.js",
-    "seed:jobs": "node scripts/seed_jobs.js"
+    "seed:jobs": "node scripts/seed_jobs.js",
+    "test:job-matcher": "node scripts/verify_job_matcher_checkpoint4.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
