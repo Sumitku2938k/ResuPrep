@@ -78,6 +78,66 @@ const resumeBuilderSchema = Joi.object({
   template: Joi.string().default('modern'),
 });
 
+const jobQuerySchema = Joi.object({
+  search: Joi.string().trim().max(100).allow(''),
+  category: Joi.string().valid('tech', 'data', 'design', 'product', 'business', 'devops'),
+  jobType: Joi.string().valid('Full-time', 'Part-time', 'Contract', 'Internship'),
+  workMode: Joi.string().valid('On-site', 'Remote', 'Hybrid'),
+  experienceLevel: Joi.string().valid('entry', 'mid', 'senior', 'lead'),
+  location: Joi.string().trim().max(100),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(50).default(10),
+});
+
+const jobIdParamSchema = Joi.object({
+  id: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid job ID format',
+      'any.required': 'Job ID is required',
+    }),
+});
+
+const matchJobSchema = Joi.object({
+  resumeId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid resume ID format',
+      'any.required': 'resumeId is required',
+    }),
+  jobId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid job ID format',
+      'any.required': 'jobId is required',
+    }),
+});
+
+const matchPastedJdSchema = Joi.object({
+  resumeId: Joi.string()
+    .regex(/^[0-9a-fA-F]{24}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'Invalid resume ID format',
+      'any.required': 'resumeId is required',
+    }),
+  jobDescription: Joi.string()
+    .trim()
+    .min(20)
+    .max(10000)
+    .required()
+    .messages({
+      'string.empty': 'Job description is required',
+      'string.min': 'Job description must be at least 20 characters long',
+      'string.max': 'Job description cannot exceed 10,000 characters',
+      'any.required': 'jobDescription is required',
+    }),
+  jobTitle: Joi.string().trim().max(150).allow('').default('Custom Job Description'),
+});
+
 module.exports = {
   signupSchema,
   loginSchema,
@@ -85,4 +145,8 @@ module.exports = {
   feedbackSchema,
   coverLetterSchema,
   resumeBuilderSchema,
+  jobQuerySchema,
+  jobIdParamSchema,
+  matchJobSchema,
+  matchPastedJdSchema,
 };
