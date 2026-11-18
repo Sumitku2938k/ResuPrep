@@ -1,8 +1,9 @@
 const ApiResponse = require('../utils/apiResponse');
 
-const validate = (schema) => {
+const validate = (schema, property = 'body') => {
   return (req, res, next) => {
-    const { error, value } = schema.validate(req.body, {
+    const target = req[property] || {};
+    const { error, value } = schema.validate(target, {
       abortEarly: false,
       stripUnknown: true,
     });
@@ -12,7 +13,7 @@ const validate = (schema) => {
       return ApiResponse.badRequest(res, 'Validation failed', errors);
     }
 
-    req.body = value;
+    req[property] = value;
     next();
   };
 };
