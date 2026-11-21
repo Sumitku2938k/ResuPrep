@@ -19,6 +19,7 @@ const skillRoutes = require('./routes/skill.routes');
 const faqRoutes = require('./routes/faq.routes');
 const feedbackRoutes = require('./routes/feedback.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
+const jobRoutes = require('./routes/job.routes');
 
 const app = express();
 
@@ -64,6 +65,7 @@ app.use('/api/v1/skills', skillRoutes);
 app.use('/api/v1/faqs', faqRoutes);
 app.use('/api/v1/feedback', feedbackRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/jobs', jobRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
