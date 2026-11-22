@@ -2068,5 +2068,250 @@ Total Tests: 44 | Passed: 44 | Failed: 0 (100% Pass Rate)
   - [`ResuPrep_Audit_Report.md`](ResuPrep_Audit_Report.md) (Appended Checkpoint 4 documentation).
 
 #### 8. Next Step
-- **Next Task:** Phase 5 — Checkpoint 5: Job Controller & Express API Routes (`/api/v1/jobs`).
+- **Completed:** Phase 5 — Checkpoint 5: Job Controller & Express API Routes (`/api/v1/jobs`).
+- **Next Task:** Phase 5 — Checkpoint 6: Frontend Job API Service Layer (`frontend/src/api/jobs.js`).
+
+---
+
+### Phase 5 — Checkpoint 5: Job APIs, Controllers & Routes
+
+#### 1. Implementation Summary
+- **RESTful Endpoints Mounted:** Registered `/api/v1/jobs` in [`backend/src/app.js`](backend/src/app.js) with modular routing in [`backend/src/routes/job.routes.js`](backend/src/routes/job.routes.js).
+- **Controller Layer:** Implemented [`backend/src/controllers/job.controller.js`](backend/src/controllers/job.controller.js) linking the MongoDB Job catalogue, user-owned ResumeBuilder documents, and the pure deterministic matching engine [`backend/src/services/jobMatcher.service.js`](backend/src/services/jobMatcher.service.js).
+- **Joi Validation:** Extended [`backend/src/validators/schemas.js`](backend/src/validators/schemas.js) with `jobQuerySchema`, `jobIdParamSchema`, `matchJobSchema`, and `matchPastedJdSchema`.
+- **Target-Aware Validation Middleware:** Enhanced [`backend/src/middleware/validate.js`](backend/src/middleware/validate.js) to validate `req.query`, `req.params`, or `req.body` with 100% backward compatibility.
+- **Privacy & Ownership Protection (IDOR Defense):** Strict query-level tenant isolation enforces `ResumeBuilder.findOne({ _id: resumeId, user: req.user._id })`. Users cannot match against other users' resumes. Private candidate contact details (email, phone, full document) are never exposed in matching responses.
+- **Automated Integration Testing:** Implemented [`backend/scripts/verify_job_api_checkpoint5.js`](backend/scripts/verify_job_api_checkpoint5.js) verifying 43 automated integration tests across 5 testing groups (A–E) against a live Express server.
+- **NPM Script Registration:** Registered `"test:job-api": "node scripts/verify_job_api_checkpoint5.js"` in [`backend/package.json`](backend/package.json).
+- **Test Pass Rate:** 43 out of 43 integration tests passed (100% pass rate). Regression verification for Checkpoint 3 (32/32 PASS) and Checkpoint 4 (44/44 PASS) confirmed zero breaking changes.
+
+#### 2. Final API Endpoint Contract Table
+| Method | Endpoint | Auth | Purpose | Input / Query | Key Status Codes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/jobs` | `optionalAuth` | List active jobs | `?search=&category=&jobType=&workMode=&experienceLevel=&location=&page=1&limit=10` | 200 (Success), 400 (Bad Query) |
+| `GET` | `/api/v1/jobs/:id` | `optionalAuth` | Get job details | `req.params.id` (24-hex ObjectId) | 200 (Success), 400 (Bad ID), 404 (Not Found / Inactive) |
+| `POST` | `/api/v1/jobs/match` | `protect` | Match saved resume against active job | `{ resumeId: ObjectId, jobId: ObjectId }` | 200 (Success), 400 (Bad Body), 401 (Unauthorized), 404 (Resume / Job Not Found) |
+| `POST` | `/api/v1/jobs/match-pasted` | `protect` | Match saved resume against pasted JD | `{ resumeId: ObjectId, jobDescription: string, jobTitle?: string }` | 200 (Success), 400 (Bad Body / Length), 401 (Unauthorized), 404 (Resume Not Found) |
+
+#### 3. Authentication & Middleware Pipeline
+- `optionalAuth`: Populates `req.user` if a valid JWT cookie or Bearer token is provided, but allows public unauthenticated browsing for catalogue listings and job details.
+- `protect`: Enforces verified JWT authentication for matching endpoints (`/match` and `/match-pasted`), returning HTTP 401 if unauthenticated.
+- `validate`: Enforces strict Joi schemas, rejects unexpected fields with `stripUnknown: true`, and formats validation errors through `ApiResponse.badRequest(res, 'Validation failed', errors)`.
+
+#### 4. Controller Responsibilities
+- `getJobs`: Handles query normalization, regex escaping (`escapeRegex`) to prevent ReDoS, multi-field query filters (`category`, `jobType`, `workMode`, `experience.level`, `location`), pagination (`page`, `limit` bounded to 50), and returns metadata (`total`, `page`, `limit`, `pages`).
+- `getJobById`: Enforces 24-char ObjectId format, restricts lookup to `isActive: true`, excludes internal Mongoose `__v`, and returns HTTP 404 if inactive or missing.
+- `matchJob`: Verifies resume ownership via `ResumeBuilder.findOne({ _id, user: req.user._id })`, verifies active job status, invokes pure `calculateJobMatch`, and formats response without leaking resume PII.
+- `matchPastedJobDescription`: Validates resume ownership, runs `extractSkillsFromJD`, constructs a temporary job object, invokes `calculateJobMatch`, and safely handles zero-skills text with HTTP 200 and `'no-skills-found'`.
+
+#### 5. Joi Validation Schemas
+```javascript
+// 1. Catalogue Query Schema
+const jobQuerySchema = Joi.object({
+  search: Joi.string().trim().max(100).allow(''),
+  category: Joi.string().valid('tech', 'data', 'design', 'product', 'business', 'devops'),
+  jobType: Joi.string().valid('Full-time', 'Part-time', 'Contract', 'Internship'),
+  workMode: Joi.string().valid('On-site', 'Remote', 'Hybrid'),
+  experienceLevel: Joi.string().valid('entry', 'mid', 'senior', 'lead'),
+  location: Joi.string().trim().max(100),
+  page: Joi.number().integer().min(1).default(1),
+  limit: Joi.number().integer().min(1).max(50).default(10),
+});
+
+// 2. Job ID Param Schema
+const jobIdParamSchema = Joi.object({
+  id: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+});
+
+// 3. Saved Resume Match Schema
+const matchJobSchema = Joi.object({
+  resumeId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+  jobId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+});
+
+// 4. Pasted JD Match Schema
+const matchPastedJdSchema = Joi.object({
+  resumeId: Joi.string().regex(/^[0-9a-fA-F]{24}$/).required(),
+  jobDescription: Joi.string().trim().min(20).max(10000).required(),
+  jobTitle: Joi.string().trim().max(150).allow('').default('Custom Job Description'),
+});
+```
+
+#### 6. Resume Ownership & IDOR Protection
+- **No Client Spoofing:** `userId` provided in request body is completely ignored; tenant identity is strictly read from `req.user._id` populated by `protect`.
+- **Query Constraint:** `ResumeBuilder.findOne({ _id: resumeId, user: req.user._id })` ensures that User B attempting to match with User A's `resumeId` receives an HTTP 404 (preventing user enumeration or unauthorized matching).
+- **PII Stripping:** Match responses return only `resumeId` and `resumeTitle`. Sensitive candidate contact details (`personalInfo.email`, `personalInfo.phone`, full document content) are strictly omitted.
+
+#### 7. Error Handling & Status Matrix
+| Scenario | Expected Status | Response Error Message |
+| :--- | :---: | :--- |
+| Unauthenticated match request | 401 | `Not authorized, no token` |
+| Invalid token signature / expired | 401 | `Not authorized, token invalid` |
+| Malformed ObjectId (`:id`, `resumeId`, `jobId`) | 400 | `Validation failed` (`"Invalid job ID format"`) |
+| Page < 1 or limit > 50 | 400 | `Validation failed` |
+| Job description < 20 or > 10,000 characters | 400 | `Validation failed` (`"must be at least 20 characters long"`) |
+| Inactive or missing job | 404 | `Job not found` |
+| Missing or unowned resume | 404 | `Resume not found` |
+| JD without recognizable skills | 200 | `No recognizable skills found in job description` (`status: 'insufficient-job-skills'`) |
+
+#### 8. API Response Examples
+
+##### Flow A: Seeded Job Match Response (`POST /api/v1/jobs/match`)
+```json
+{
+  "success": true,
+  "message": "Job match calculated successfully",
+  "data": {
+    "jobId": "6af945dbbc62a56f2c722166",
+    "jobTitle": "Senior Platform Engineer (Test)",
+    "company": "CloudScale Testing Corp",
+    "resumeId": "6af945dbbc62a56f2c722165",
+    "resumeTitle": "Senior Full Stack Resume",
+    "matchPercentage": 71,
+    "matchedRequiredSkills": ["JavaScript", "React", "Node.js"],
+    "missingRequiredSkills": ["MongoDB"],
+    "matchedPreferredSkills": ["Docker"],
+    "missingPreferredSkills": ["AWS"],
+    "partialSkills": [],
+    "breakdown": {
+      "requiredWeight": 85,
+      "preferredWeight": 15,
+      "requiredScore": 75,
+      "preferredScore": 50,
+      "matchedRequiredCount": 3,
+      "totalRequiredCount": 4,
+      "matchedPreferredCount": 1,
+      "totalPreferredCount": 2
+    },
+    "experienceCompatibility": {
+      "status": "match",
+      "requiredLevel": "senior",
+      "requiredMinYears": 3,
+      "estimatedYears": 4,
+      "note": "Candidate estimated experience (4.0 yrs) satisfies the required 3 yrs."
+    },
+    "status": "success"
+  }
+}
+```
+
+##### Flow B: Pasted JD Match Response (`POST /api/v1/jobs/match-pasted`)
+```json
+{
+  "success": true,
+  "message": "Job description matched successfully",
+  "data": {
+    "resumeId": "6af945dbbc62a56f2c722165",
+    "resumeTitle": "Senior Full Stack Resume",
+    "jobTitle": "Senior Cloud Engineer",
+    "extractedSkills": {
+      "requiredSkills": ["JavaScript", "React", "Node.js", "MongoDB"],
+      "preferredSkills": ["Docker", "AWS"],
+      "extractedSkillsCount": 6,
+      "status": "success"
+    },
+    "matchPercentage": 71,
+    "matchedRequiredSkills": ["JavaScript", "React", "Node.js"],
+    "missingRequiredSkills": ["MongoDB"],
+    "matchedPreferredSkills": ["Docker"],
+    "missingPreferredSkills": ["AWS"],
+    "partialSkills": [],
+    "breakdown": {
+      "requiredWeight": 85,
+      "preferredWeight": 15,
+      "requiredScore": 75,
+      "preferredScore": 50,
+      "matchedRequiredCount": 3,
+      "totalRequiredCount": 4,
+      "matchedPreferredCount": 1,
+      "totalPreferredCount": 2
+    },
+    "experienceCompatibility": {
+      "status": "match",
+      "requiredLevel": "mid",
+      "requiredMinYears": 0,
+      "estimatedYears": 4,
+      "note": "Candidate estimated experience (4.0 yrs) satisfies the required 0 yrs."
+    },
+    "status": "success"
+  }
+}
+```
+
+#### 9. Automated Integration Test Results (`backend/scripts/verify_job_api_checkpoint5.js`)
+```text
+--- GROUP A: JOB CATALOGUE ---
+[TEST 01] ✅ PASS: GET /api/v1/jobs Returns Only Active Jobs
+[TEST 02] ✅ PASS: Pagination Defaults to Page 1 and Limit 10
+[TEST 03] ✅ PASS: Pagination Metadata (total, page, limit, pages) Calculated Accurately
+[TEST 04] ✅ PASS: Category Filter Accurately Constrains Query (?category=tech)
+[TEST 05] ✅ PASS: Job Type Filter Accurately Constrains Query (?jobType=Full-time)
+[TEST 06] ✅ PASS: Work Mode Filter Accurately Constrains Query (?workMode=Hybrid)
+[TEST 07] ✅ PASS: Experience Level Filter Accurately Constrains Query (?experienceLevel=senior)
+[TEST 08] ✅ PASS: Location Filter Matches Geographic Location (?location=San Francisco)
+[TEST 09] ✅ PASS: Search Query Matches Title/Company/Description Case-Insensitively
+[TEST 10] ✅ PASS: Multiple Filters Combine via Intersection (Category + WorkMode + ExpLevel)
+[TEST 11] ✅ PASS: Malicious Regex Search Terms Escaped Safely (No ReDoS / Unhandled Rejection)
+[TEST 12] ✅ PASS: Invalid Pagination Rejected with HTTP 400 (?page=0)
+[TEST 13] ✅ PASS: Excessive Page Limit Rejected with HTTP 400 (?limit=51 > 50)
+[TEST 14] ✅ PASS: Zero Matching Records Returns HTTP 200 with Empty Array & Total 0
+
+--- GROUP B: JOB DETAILS ---
+[TEST 15] ✅ PASS: GET /api/v1/jobs/:id Returns Complete Active Job Details
+[TEST 16] ✅ PASS: Malformed Job ObjectId Returns HTTP 400 Bad Request
+[TEST 17] ✅ PASS: Non-Existent Valid ObjectId Returns HTTP 404 Not Found
+[TEST 18] ✅ PASS: Inactive Job Listing Returns HTTP 404 (Hidden from Public)
+
+--- GROUP C: AUTHENTICATION AND OWNERSHIP ---
+[TEST 19] ✅ PASS: Unauthenticated POST /match Returns HTTP 401 Unauthorized
+[TEST 20] ✅ PASS: Authorized User Can Match Own Saved Resume (HTTP 200)
+[TEST 21] ✅ PASS: IDOR Defense: User B Cannot Match Against User A's Resume (HTTP 404)
+[TEST 22] ✅ PASS: Non-Existent Resume ID Returns HTTP 404 Not Found
+[TEST 23] ✅ PASS: Non-Existent Job ID Returns HTTP 404 Not Found
+[TEST 24] ✅ PASS: Inactive Job Cannot Be Matched (Returns HTTP 404)
+[TEST 25] ✅ PASS: Request-Body "userId" Ignored; Authentication Token Identity Enforced
+[TEST 26] ✅ PASS: Privacy Enforcement: PII & Full Resume Document Not Exposed in Response
+
+--- GROUP D: SAVED RESUME MATCHING ---
+[TEST 27] ✅ PASS: POST /match Returns HTTP 200 with Standardized ApiResponse Envelope
+[TEST 28] ✅ PASS: Match Percentage Matches Pure Service Output Exactly (71%)
+[TEST 29] ✅ PASS: Matched & Missing Skills Accurately Partitioned Between Req & Pref
+[TEST 30] ✅ PASS: Breakdown Object Contains Detailed Scoring Ratios & Counters
+[TEST 31] ✅ PASS: Experience Compatibility Assessment Evaluated & Returned Safely
+[TEST 32] ✅ PASS: Job with Zero Skills Returns HTTP 200 with "insufficient-job-skills"
+[TEST 33] ✅ PASS: Repeated Match Requests Produce 100% Identical Output (Zero Drift)
+
+--- GROUP E: PASTED JD MATCHING ---
+[TEST 34] ✅ PASS: POST /match-pasted Extracts Skills & Computes Match (HTTP 200)
+[TEST 35] ✅ PASS: Section Headings in Pasted JD Partition Skills into Required & Preferred
+[TEST 36] ✅ PASS: Non-Existent Resume on Pasted Match Returns HTTP 404 Not Found
+[TEST 37] ✅ PASS: Job Description < 20 Characters Rejected with HTTP 400
+[TEST 38] ✅ PASS: Job Description > 10,000 Characters Rejected with HTTP 400
+[TEST 39] ✅ PASS: Empty / Whitespace-Only Job Description Rejected with HTTP 400
+[TEST 40] ✅ PASS: Malformed Resume ID on Pasted Match Rejected with HTTP 400
+[TEST 41] ✅ PASS: Unknown Non-Technical Terms Do Not Produce Fabricated Matches
+[TEST 42] ✅ PASS: JD Without Known Skills Returns HTTP 200 ("no-skills-found", 0% Score)
+[TEST 43] ✅ PASS: Repeated Pasted JD Matching Yields 100% Identical Output
+
+===================================================================
+VERIFICATION SUMMARY: ALL TESTS PASSED ✅
+Total Tests: 43 | Passed: 43 | Failed: 0 (100% Pass Rate)
+===================================================================
+```
+
+#### 10. Files Created and Modified
+- **Created:**
+  - [`backend/src/controllers/job.controller.js`](backend/src/controllers/job.controller.js) (Express controller for job catalogue and resume matching).
+  - [`backend/src/routes/job.routes.js`](backend/src/routes/job.routes.js) (Express routes with auth guards and Joi validation).
+  - [`backend/scripts/verify_job_api_checkpoint5.js`](backend/scripts/verify_job_api_checkpoint5.js) (43-assertion automated API integration test suite).
+- **Modified:**
+  - [`backend/src/app.js`](backend/src/app.js) (Mounted `/api/v1/jobs` router).
+  - [`backend/src/validators/schemas.js`](backend/src/validators/schemas.js) (Added Joi schemas for query, param, and matching payloads).
+  - [`backend/src/middleware/validate.js`](backend/src/middleware/validate.js) (Added target-property support for body, query, and params).
+  - [`backend/package.json`](backend/package.json) (Added `"test:job-api": "node scripts/verify_job_api_checkpoint5.js"`).
+  - [`ResuPrep_Audit_Report.md`](ResuPrep_Audit_Report.md) (Documented Checkpoint 5 completion and test results).
+
+#### 11. Known Limitations & Next Steps
+- **Next Checkpoint:** Phase 5 — Checkpoint 6: Frontend Job API Service Layer (`frontend/src/api/jobs.js`).
+- **No Blockers:** All backend REST APIs are operational, authenticated, validated, and verified with 100% test passing across Checkpoints 3, 4, and 5.
 
