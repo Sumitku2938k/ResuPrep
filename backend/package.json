@@ -9,7 +9,8 @@
     "seed": "node scripts/seed.js",
     "seed:jobs": "node scripts/seed_jobs.js",
     "test:job-matcher": "node scripts/verify_job_matcher_checkpoint4.js",
-    "test:job-api": "node scripts/verify_job_api_checkpoint5.js"
+    "test:job-api": "node scripts/verify_job_api_checkpoint5.js",
+    "test:job-api-service": "node scripts/verify_job_api_service_checkpoint6.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
