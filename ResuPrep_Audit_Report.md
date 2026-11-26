@@ -2312,6 +2312,119 @@ Total Tests: 43 | Passed: 43 | Failed: 0 (100% Pass Rate)
   - [`ResuPrep_Audit_Report.md`](ResuPrep_Audit_Report.md) (Documented Checkpoint 5 completion and test results).
 
 #### 11. Known Limitations & Next Steps
-- **Next Checkpoint:** Phase 5 — Checkpoint 6: Frontend Job API Service Layer (`frontend/src/api/jobs.js`).
-- **No Blockers:** All backend REST APIs are operational, authenticated, validated, and verified with 100% test passing across Checkpoints 3, 4, and 5.
+- **Completed:** Phase 5 — Checkpoint 6: Frontend Job API Service Layer (`frontend/src/api/jobs.js`).
+- **Next Checkpoint:** Phase 5 — Checkpoint 7: Job Matcher UI Integration (`frontend/src/pages/Jobs.jsx`, `frontend/src/components/JobCard.jsx`).
+- **No Blockers:** The frontend API service is implemented, tested with 100% pass rate (33/33 tests), verified with a clean Vite production build, and ready for UI consumption.
+
+---
+
+### Phase 5 — Checkpoint 6: Frontend Job API Service Layer
+
+#### 1. Implementation Summary
+- **Dedicated Service Layer:** Created [`frontend/src/api/jobs.js`](frontend/src/api/jobs.js) providing a clean, strongly-validated, reusable interface for all Job Matcher backend operations.
+- **Shared API Client Integration:** Exclusively delegates network transport to the existing [`frontend/src/api/client.js`](frontend/src/api/client.js) (`api.get`, `api.post`). Contains zero direct `axios`, `fetch()`, or `XMLHttpRequest` calls.
+- **Client-Side Pre-Flight Validation:**
+  - `getJobByIdApi`: Validates that `id` is a non-empty string and safely encodes it via `encodeURIComponent`.
+  - `matchJobApi`: Enforces that `resumeId` and `jobId` are valid non-empty strings before network dispatch.
+  - `matchPastedJdApi`: Enforces non-empty string for `resumeId`; strictly validates `jobDescription` string bounds ($20 \le \text{length} \le 10,000$ characters) matching backend Joi constraints; cleanly handles optional `jobTitle`.
+- **Query Parameter Serialization:** Safely parses and serializes catalogue query filters (`search`, `category`, `jobType`, `workMode`, `experienceLevel`, `location`, `page`, `limit`) using `URLSearchParams`. Omits null, undefined, empty, and whitespace-only parameters while preserving immutability of the caller's input object.
+- **Stateless & Authoritative:** Contains zero mock data, zero simulated match scores, and zero `localStorage` operations. The backend remains the sole authoritative source of truth for matching algorithms, tenant isolation, and resume ownership.
+- **Automated Verification:** Implemented [`backend/scripts/verify_job_api_service_checkpoint6.js`](backend/scripts/verify_job_api_service_checkpoint6.js) executing 33 automated tests across Groups A through F against a live Express server and MongoDB database. All 33 tests passed (100% pass rate).
+- **Vite Production Build:** Executed `npm run build` in `frontend/` verifying that the new module builds cleanly with 0 errors.
+- **Zero Scope Creep:** Confined strictly to `frontend/src/api/jobs.js`, `backend/package.json`, and verification scripts. `Jobs.jsx` and `JobCard.jsx` remain untouched.
+
+#### 2. Exported Core Functions
+| Function | Signature | Purpose | Target Endpoint |
+| :--- | :--- | :--- | :--- |
+| `getJobsApi` | `(params?: Object) => Promise<Object>` | Fetch job catalogue with filters & pagination | `GET /api/v1/jobs` |
+| `getJobByIdApi` | `(id: string) => Promise<Object>` | Fetch details of single active job listing | `GET /api/v1/jobs/:id` |
+| `matchJobApi` | `({ resumeId: string, jobId: string }) => Promise<Object>` | Match saved resume against active job listing | `POST /api/v1/jobs/match` |
+| `matchPastedJdApi` | `({ resumeId: string, jobDescription: string, jobTitle?: string }) => Promise<Object>` | Match saved resume against pasted job description text | `POST /api/v1/jobs/match-pasted` |
+
+#### 3. Endpoint Contracts & Validation Rules
+- **Job Catalogue (`getJobsApi`):**
+  - Query parameters: `search`, `category`, `jobType`, `workMode`, `experienceLevel`, `location`, `page`, `limit`.
+  - Sanitization: Null, undefined, empty strings, and whitespace-only strings are stripped. Non-empty string and numeric values are safely encoded.
+  - Immutability: Callers' params object is never modified.
+- **Job Details (`getJobByIdApi`):**
+  - Pre-flight: Rejects null, undefined, non-string, or empty IDs with `Error('A valid job ID is required')`.
+  - Encoding: Safely passes ID through `encodeURIComponent`.
+  - Error preservation: Propagates backend 404 (Job not found) and 400 (Invalid ID).
+- **Saved Resume Match (`matchJobApi`):**
+  - Pre-flight: Rejects invalid or missing `resumeId` or `jobId` with descriptive client errors before network dispatch.
+  - Payload: Dispatches strictly `{ resumeId, jobId }`. No `userId` or client ownership claims are sent.
+  - Error preservation: Propagates backend 401 (Unauthorized) and 404 (Resume / Job not found).
+- **Pasted JD Match (`matchPastedJdApi`):**
+  - Pre-flight: Rejects non-string or out-of-bounds JDs ($< 20$ or $> 10,000$ chars) with descriptive client errors.
+  - Payload: Dispatches `{ resumeId, jobDescription, [jobTitle] }`.
+  - Status preservation: Accurately preserves backend `'no-skills-found'` extraction status and `'insufficient-job-skills'` match status.
+
+#### 4. Automated Verification Test Results (`backend/scripts/verify_job_api_service_checkpoint6.js`)
+```text
+===================================================================
+   RESUPREP - PHASE 5 CHECKPOINT 6: FRONTEND JOB API SERVICE      
+   Testing Module Exports, Pre-flight Checks & Live API Routing   
+===================================================================
+
+--- GROUP A: MODULE INTEGRITY ---
+[TEST 01] ✅ PASS: All Four Core API Functions Exported (getJobs, getJobById, matchJob, matchPastedJd)
+[TEST 02] ✅ PASS: Module Imports Shared API Client (from "./client.js")
+[TEST 03] ✅ PASS: Zero Direct axios or fetch() Invocations in Module
+
+--- GROUP B: JOB LISTING (getJobsApi) ---
+[TEST 04] ✅ PASS: getJobsApi() Fetches Active Job Catalogue (HTTP 200)
+[TEST 05] ✅ PASS: getJobsApi() Serializes Filter Parameters (?category=tech&workMode=Remote)
+[TEST 06] ✅ PASS: Empty, Null, Undefined & Whitespace Filters Omitted from Query String
+[TEST 07] ✅ PASS: Pagination Parameters (?page=1&limit=3) Applied Correctly
+[TEST 08] ✅ PASS: Params Object Immutability Preserved (Zero Mutation of Input)
+[TEST 09] ✅ PASS: Special Characters in Search Serialized and Escaped Safely
+
+--- GROUP C: JOB DETAILS (getJobByIdApi) ---
+[TEST 10] ✅ PASS: getJobByIdApi(id) Retrieves Full Job Details for Valid ID
+[TEST 11] ✅ PASS: Job ID Parameter Safely Encoded via encodeURIComponent
+[TEST 12] ✅ PASS: Pre-flight Validation Blocks Invalid IDs (null, undefined, empty, non-string)
+[TEST 13] ✅ PASS: Backend HTTP 404 Errors Preserved Intact on getJobByIdApi()
+
+--- GROUP D: SAVED RESUME MATCHING (matchJobApi) ---
+[TEST 14] ✅ PASS: matchJobApi() Successfully Dispatches to POST /jobs/match
+[TEST 15] ✅ PASS: Request Payload Formatted Strictly with resumeId and jobId
+[TEST 16] ✅ PASS: Pre-flight Validation Rejects Empty or Non-String resumeId
+[TEST 17] ✅ PASS: Pre-flight Validation Rejects Empty or Non-String jobId
+[TEST 18] ✅ PASS: Preserves Full Breakdown, Matched Skills, Missing Skills & Exp Compatibility
+[TEST 19] ✅ PASS: Backend Errors Preserved Intact (401 Unauthorized & 404 IDOR Protection)
+
+--- GROUP E: PASTED JD MATCHING (matchPastedJdApi) ---
+[TEST 20] ✅ PASS: matchPastedJdApi() Dispatches to POST /jobs/match-pasted (HTTP 200)
+[TEST 21] ✅ PASS: Pasted JD Request Payload Formatted with resumeId, jobDescription, and jobTitle
+[TEST 22] ✅ PASS: Optional jobTitle Handled Cleanly (Defaults Gracefully on Backend)
+[TEST 23] ✅ PASS: Pre-flight Validation Blocks Whitespace-Only Job Description
+[TEST 24] ✅ PASS: Pre-flight Validation Blocks JD Shorter than Minimum (20 Chars)
+[TEST 25] ✅ PASS: Pre-flight Validation Blocks JD Exceeding Maximum (10,000 Chars)
+[TEST 26] ✅ PASS: Pre-flight Validation Blocks Invalid resumeId on matchPastedJdApi()
+[TEST 27] ✅ PASS: Preserves "no-skills-found" & "insufficient-job-skills" Status from Backend
+[TEST 28] ✅ PASS: Backend 404 Error Preserved when Matching Pasted JD with Unowned Resume
+
+--- GROUP F: ARCHITECTURAL INTEGRITY ---
+[TEST 29] ✅ PASS: Zero Mock Data, Fake Jobs, or Random Percentages in jobs.js
+[TEST 30] ✅ PASS: Zero localStorage Dependency in jobs.js (Stateless API Delegator)
+[TEST 31] ✅ PASS: Reuses Centralized apiClient Exclusively (Single Source of Truth)
+[TEST 32] ✅ PASS: UI Pages and Components Untouched (Jobs.jsx & JobCard.jsx Unmodified)
+[TEST 33] ✅ PASS: Authorized Scope Strictly Confined to frontend/src/api/jobs.js
+
+===================================================================
+VERIFICATION SUMMARY: ALL TESTS PASSED ✅
+Total Tests: 33 | Passed: 33 | Failed: 0 (100% Pass Rate)
+===================================================================
+```
+
+#### 5. Files Created and Modified
+- **Created:**
+  - [`frontend/src/api/jobs.js`](frontend/src/api/jobs.js) (Dedicated frontend Job API service layer).
+  - [`backend/scripts/verify_job_api_service_checkpoint6.js`](backend/scripts/verify_job_api_service_checkpoint6.js) (33-assertion automated frontend API service test suite).
+- **Modified:**
+  - [`backend/package.json`](backend/package.json) (Added `"test:job-api-service": "node scripts/verify_job_api_service_checkpoint6.js"`).
+  - [`ResuPrep_Audit_Report.md`](ResuPrep_Audit_Report.md) (Appended Checkpoint 6 documentation).
+
+#### 6. Next Step
+- **Next Checkpoint:** Phase 5 — Checkpoint 7: Job Matcher UI Integration (`frontend/src/pages/Jobs.jsx`, `frontend/src/components/JobCard.jsx`).
 
